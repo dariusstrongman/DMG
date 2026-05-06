@@ -96,6 +96,10 @@ export function IdeaCard({ idea }: { idea: IdeaRow }) {
                 <span className="text-[10px] font-mono text-muted-foreground/80">
                   by <span className="text-foreground/90">{idea.submittedBy}</span>
                 </span>
+              ) : idea.source === "manual" ? (
+                <span className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground/80 px-1.5 py-0.5 rounded bg-secondary border border-border">
+                  Manual
+                </span>
               ) : null}
             </div>
             <h3 className="font-semibold text-base leading-snug">{idea.title}</h3>

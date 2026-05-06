@@ -1,6 +1,5 @@
 import { Flame, Calendar, Clock, Image as ImageIcon, AlertTriangle, Lightbulb } from "lucide-react";
 import { timeAgo } from "@/lib/utils";
-import { GenerateViralPickButton } from "./generate-viral-pick-button";
 import { CopyPickButton } from "./copy-pick-button";
 
 type Pick = {
@@ -28,14 +27,13 @@ export function ViralPickCard({ pick }: { pick: Pick | null }) {
             <Flame className="size-4 text-primary" />
           </div>
           <div className="flex-1">
-            <p className="text-xs font-mono uppercase tracking-widest text-primary/80">Viral pick</p>
-            <h2 className="text-xl font-semibold">Find the next video most likely to pop</h2>
+            <p className="text-xs font-mono uppercase tracking-widest text-primary/80">Viral pick of the week</p>
+            <h2 className="text-xl font-semibold">No pick yet</h2>
           </div>
         </div>
-        <p className="text-sm text-muted-foreground mb-4">
-          The model reads top performers, best posting slots, title patterns, and format mix, then proposes ONE specific pitch: title, day, time, hook, thumbnail concept, and an honest risk note.
+        <p className="text-sm text-muted-foreground">
+          The first pick is being prepared. Refresh in a moment.
         </p>
-        <GenerateViralPickButton label="Generate viral pick" />
       </div>
     );
   }
@@ -55,10 +53,10 @@ export function ViralPickCard({ pick }: { pick: Pick | null }) {
             <Flame className="size-4 text-primary" />
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-xs font-mono uppercase tracking-widest text-primary/80 flex items-center gap-2">
-              Viral pick
+            <p className="text-xs font-mono uppercase tracking-widest text-primary/80 flex items-center gap-2 flex-wrap">
+              Viral pick of the week
               <span className="text-muted-foreground/70 normal-case tracking-normal">
-                · generated {timeAgo(pick.createdAt)}
+                · {timeAgo(pick.createdAt)}
               </span>
             </p>
             <h2 className="text-2xl font-semibold tracking-tight mt-1 leading-tight">{pick.title}</h2>
@@ -99,9 +97,9 @@ export function ViralPickCard({ pick }: { pick: Pick | null }) {
           </Block>
         ) : null}
 
-        {/* Why it'll work */}
+        {/* Why this should go viral */}
         {pick.viralThesis ? (
-          <Block label="Why it'll work" icon={<Lightbulb className="size-3.5 text-yellow-300" />}>
+          <Block label="Why this should go viral" icon={<Lightbulb className="size-3.5 text-yellow-300" />}>
             <p className="text-sm text-foreground/90 leading-relaxed">{pick.viralThesis}</p>
           </Block>
         ) : null}
@@ -130,7 +128,6 @@ export function ViralPickCard({ pick }: { pick: Pick | null }) {
       </div>
 
       <div className="border-t border-primary/20 bg-background/30 px-5 py-3 flex items-center gap-2 flex-wrap">
-        <GenerateViralPickButton label="Regenerate" small />
         <CopyPickButton pick={pick} />
         {pick.modelUsed ? (
           <span className="text-[10px] font-mono text-muted-foreground/60 ml-auto">{pick.modelUsed}</span>

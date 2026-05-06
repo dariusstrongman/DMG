@@ -1,8 +1,9 @@
-// Generate ONE highly-specific viral video pitch. Synthesizes the
-// channel's full analytics surface — top performers, best posting
-// slots, title patterns, format mix, recent uploads to avoid — into
-// a concrete recommendation: title, day, time, hook, thumbnail concept,
-// risk. Persisted to dmg_viral_picks; latest row is the active pick.
+// Generate this week's batch of viral video pitches. Synthesizes the
+// channel's full analytics surface (top performers, best posting slots,
+// title patterns, format mix) into N distinct pitches with intentional
+// variety: different formats, different angles, different topics.
+// Persisted to dmg_viral_picks. The N most-recent rows are the active
+// batch; older rows live as history.
 
 import { db } from "./db";
 import { fetchDmgSnapshot } from "./youtube";
@@ -16,6 +17,7 @@ import {
 } from "./analytics-aggregates";
 
 const MODEL = "gpt-4o-mini";
+export const PICKS_PER_WEEK = 4;
 
 type GeneratedPick = {
   title: string;
@@ -30,13 +32,15 @@ type GeneratedPick = {
   tags: string[];
 };
 
+type GenerateBatchResponse = { picks: GeneratedPick[] };
+
 function normalizeOutline(o: unknown): string {
   if (Array.isArray(o)) return o.map((line) => `- ${String(line).trim()}`).join("\n");
   if (typeof o === "string") return o;
   return "";
 }
 
-export async function generateViralPick() {
+export async function generateWeeklyViralPicks(count: number = PICKS_PER_WEEK) {
   const snap = await fetchDmgSnapshot(50);
   if ("error" in snap) throw new Error(snap.error);
   const { channel, videos } = snap;
@@ -51,7 +55,6 @@ export async function generateViralPick() {
     update: {},
   });
 
-  // Build all the signal we have.
   const posting = postingTimeAnalysis(videos, CHANNEL_TIMEZONE);
   const fmt = formatPerformance(videos);
   const sig = titleSignals(videos);
@@ -65,24 +68,29 @@ export async function generateViralPick() {
   const system = [
     `You are a YouTube growth strategist for ${DMG_BRAND} (${DMG_HANDLE}).`,
     "You will be handed the channel's full analytics surface.",
-    "Your job: propose ONE specific video that has the strongest viral potential for THIS channel.",
+    `Your job: propose ${count} distinct video pitches with strong viral potential for THIS channel.`,
     "Be concrete and channel-specific. Reference actual patterns you see in the data.",
     "Do NOT recommend a video that obviously duplicates a recent upload.",
     "",
-    "Choose:",
-    "- format: pick the one that performs better on this channel.",
-    "- post_day + post_time: pick from the channel's best slots in their local timezone.",
-    "- title: align with the title patterns that work (length, question/no, number/no).",
+    `IMPORTANT: the ${count} pitches must be DIFFERENT from each other. Vary:`,
+    "- format (mix Long-form and Shorts based on what works for this channel)",
+    "- topic / angle (don't propose 4 versions of the same idea)",
+    "- structure (e.g. one reaction, one tier-list, one explainer, one skit, etc — pick what suits the channel)",
+    "",
+    "Per pitch, choose:",
+    "- format: pick the one that fits THIS pitch best.",
+    "- post_day + post_time: from the channel's best slots in their local timezone. Spread the 4 across different best slots.",
+    "- title: align with title patterns that work (length, question/no, number/no).",
     "- hook: first 5-10 seconds spoken aloud. Specific words.",
     "- outline: 4-6 short beats, one line each.",
     "- thumbnail_concept: one sentence visual direction (no emojis).",
     "- viral_thesis: 2-3 sentences. Reference real numbers and titles you saw.",
-    "- risk_note: 1 honest sentence about what could go wrong or why this might fail.",
+    "- risk_note: 1 honest sentence about why this might fail.",
     "- tags: 4-7 relevant tags.",
     "",
     "Tone: blunt, specific, no marketing-speak. No em-dashes. No 'leverage', 'unlock', 'level up'.",
     "",
-    "Return ONLY JSON: {\"title\":\"\",\"format\":\"long|short|either\",\"post_day\":\"\",\"post_time\":\"\",\"hook\":\"\",\"outline\":\"\",\"thumbnail_concept\":\"\",\"viral_thesis\":\"\",\"risk_note\":\"\",\"tags\":[\"\"]}",
+    "Return ONLY JSON: {\"picks\":[{\"title\":\"\",\"format\":\"long|short|either\",\"post_day\":\"\",\"post_time\":\"\",\"hook\":\"\",\"outline\":\"\",\"thumbnail_concept\":\"\",\"viral_thesis\":\"\",\"risk_note\":\"\",\"tags\":[\"\"]}]}",
   ].join("\n");
 
   const user = [
@@ -122,52 +130,74 @@ export async function generateViralPick() {
     "TITLE LENGTH BUCKETS (avg views):",
     lenBuckets.map((b) => `- ${b.label}: ${b.uploads} uploads, avg ${Math.round(b.avgViews).toLocaleString()}`).join("\n"),
     "",
-    "Now produce the single most viral pitch for THIS channel.",
+    `Now produce ${count} distinct, varied viral pitches for THIS channel.`,
   ]
     .filter(Boolean)
     .join("\n");
 
-  const { data, modelUsed } = await chatJson<GeneratedPick>({
+  const { data, modelUsed } = await chatJson<GenerateBatchResponse>({
     model: MODEL,
     system,
     user,
-    temperature: 0.75,
+    temperature: 0.85,
   });
 
-  if (!data?.title) throw new Error("Model returned no title.");
+  const picks = Array.isArray(data?.picks) ? data.picks : [];
+  if (picks.length === 0) throw new Error("Model returned no picks.");
 
-  return db.viralPick.create({
-    data: {
-      channelId: channelRow.id,
-      title: data.title.slice(0, 200),
-      format:
-        data.format === "long" || data.format === "short" || data.format === "either"
-          ? data.format
-          : "either",
-      postDay: data.post_day || null,
-      postTime: data.post_time || null,
-      hook: data.hook || "",
-      outline: normalizeOutline(data.outline),
-      thumbnailConcept: data.thumbnail_concept || null,
-      viralThesis: data.viral_thesis || null,
-      riskNote: data.risk_note || null,
-      tags: Array.isArray(data.tags) ? data.tags.slice(0, 8).map((t) => String(t).slice(0, 40)) : [],
-      signalUsed: {
-        topSlots: posting.topSlots,
-        formatPerf: { long: fmt.long, short: fmt.short, recommendation: fmt.recommendation },
-        titleSignals: sig,
-      },
-      modelUsed,
-    },
-  });
+  const created = await db.$transaction(
+    picks.slice(0, count).map((p) =>
+      db.viralPick.create({
+        data: {
+          channelId: channelRow.id,
+          title: (p.title || "Untitled pitch").slice(0, 200),
+          format:
+            p.format === "long" || p.format === "short" || p.format === "either"
+              ? p.format
+              : "either",
+          postDay: p.post_day || null,
+          postTime: p.post_time || null,
+          hook: p.hook || "",
+          outline: normalizeOutline(p.outline),
+          thumbnailConcept: p.thumbnail_concept || null,
+          viralThesis: p.viral_thesis || null,
+          riskNote: p.risk_note || null,
+          tags: Array.isArray(p.tags) ? p.tags.slice(0, 8).map((t) => String(t).slice(0, 40)) : [],
+          signalUsed: {
+            topSlots: posting.topSlots,
+            formatPerf: { long: fmt.long, short: fmt.short, recommendation: fmt.recommendation },
+            titleSignals: sig,
+          },
+          modelUsed,
+        },
+      })
+    )
+  );
+
+  return created;
 }
 
-export async function getLatestViralPick() {
+export async function getActiveViralPicks(count: number = PICKS_PER_WEEK) {
   try {
-    return await db.viralPick.findFirst({
+    return await db.viralPick.findMany({
       orderBy: { createdAt: "desc" },
+      take: count,
     });
   } catch {
-    return null;
+    return [];
+  }
+}
+
+// Returns picks older than the active batch, for the history list.
+export async function getViralPickHistory(skip: number = PICKS_PER_WEEK, take: number = 12) {
+  try {
+    return await db.viralPick.findMany({
+      orderBy: { createdAt: "desc" },
+      skip,
+      take,
+      select: { id: true, title: true, postDay: true, postTime: true, createdAt: true },
+    });
+  } catch {
+    return [];
   }
 }

@@ -6,10 +6,10 @@
 // running so an open endpoint can't be hammered.
 
 import { NextRequest } from "next/server";
-import { generateViralPick } from "@/lib/viral-pick";
+import { generateWeeklyViralPicks, PICKS_PER_WEEK } from "@/lib/viral-pick";
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 60;
+export const maxDuration = 90;
 
 export async function GET(req: NextRequest) {
   const auth = req.headers.get("authorization");
@@ -18,8 +18,12 @@ export async function GET(req: NextRequest) {
     return new Response("Unauthorized", { status: 401 });
   }
   try {
-    const pick = await generateViralPick();
-    return Response.json({ ok: true, id: pick.id, title: pick.title });
+    const picks = await generateWeeklyViralPicks(PICKS_PER_WEEK);
+    return Response.json({
+      ok: true,
+      count: picks.length,
+      titles: picks.map((p) => p.title),
+    });
   } catch (e) {
     return Response.json(
       { ok: false, error: e instanceof Error ? e.message : "Unknown error" },

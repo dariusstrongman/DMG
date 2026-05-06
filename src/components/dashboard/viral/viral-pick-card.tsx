@@ -18,7 +18,7 @@ type Pick = {
   createdAt: Date | string;
 };
 
-export function ViralPickCard({ pick }: { pick: Pick | null }) {
+export function ViralPickCard({ pick, rank }: { pick: Pick | null; rank?: number }) {
   if (!pick) {
     return (
       <div className="rounded-2xl border border-primary/30 bg-gradient-to-br from-primary/[0.06] via-transparent to-emerald-500/[0.04] p-6">
@@ -54,12 +54,12 @@ export function ViralPickCard({ pick }: { pick: Pick | null }) {
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-xs font-mono uppercase tracking-widest text-primary/80 flex items-center gap-2 flex-wrap">
-              Viral pick of the week
+              {rank ? <span className="text-foreground/80">Pitch #{rank}</span> : "Viral pick of the week"}
               <span className="text-muted-foreground/70 normal-case tracking-normal">
                 · {timeAgo(pick.createdAt)}
               </span>
             </p>
-            <h2 className="text-2xl font-semibold tracking-tight mt-1 leading-tight">{pick.title}</h2>
+            <h2 className="text-xl font-semibold tracking-tight mt-1 leading-tight">{pick.title}</h2>
           </div>
         </div>
 

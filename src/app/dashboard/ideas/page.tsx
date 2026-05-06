@@ -99,6 +99,8 @@ export default async function IdeasPage({
                 tags: idea.tags,
                 status: idea.status,
                 source: idea.source,
+                submittedBy: idea.submittedBy,
+                aiScore: idea.aiScore,
                 modelUsed: idea.modelUsed,
                 createdAt: idea.createdAt,
               }}

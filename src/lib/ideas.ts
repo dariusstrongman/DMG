@@ -18,6 +18,7 @@ type GeneratedIdea = {
   rationale: string;
   format: "long" | "short" | "either";
   tags: string[];
+  viral_score: number; // 1-10
 };
 
 // Models often return outline as an array of bullets even when asked
@@ -66,8 +67,9 @@ function buildPrompt(channel: ChannelStats, videos: VideoStats[], count: number)
     "- The rationale should reference specific patterns you noticed in the channel's catalog.",
     "- Avoid clickbait that the channel hasn't earned.",
     "- Pick format (long, short, or either) based on what tends to perform on this channel.",
+    "- Score each idea's viral potential 1-10 (10 = unmissable banger for this channel; 1 = unlikely to land). Be honest, don't grade-inflate.",
     "",
-    "Return ONLY valid JSON of shape: {\"ideas\":[{\"title\":\"\",\"hook\":\"\",\"outline\":\"\",\"rationale\":\"\",\"format\":\"long|short|either\",\"tags\":[\"\"]}]}",
+    "Return ONLY valid JSON of shape: {\"ideas\":[{\"title\":\"\",\"hook\":\"\",\"outline\":\"\",\"rationale\":\"\",\"format\":\"long|short|either\",\"tags\":[\"\"],\"viral_score\":7}]}",
   ].join("\n");
 
   const user = [
@@ -143,6 +145,10 @@ export async function generateIdeas(count: number = DEFAULT_COUNT) {
               : "either",
           tags: Array.isArray(idea.tags) ? idea.tags.slice(0, 8).map((t) => String(t).slice(0, 40)) : [],
           source: "ai",
+          aiScore:
+            typeof idea.viral_score === "number" && idea.viral_score >= 1 && idea.viral_score <= 10
+              ? Math.round(idea.viral_score)
+              : null,
           modelUsed,
         },
       })
@@ -150,6 +156,65 @@ export async function generateIdeas(count: number = DEFAULT_COUNT) {
   );
 
   return created;
+}
+
+// Score a single (typically manual) idea on a 1-10 scale, given the
+// channel context. Used right after a manual idea is submitted so the
+// score appears on the card immediately.
+export async function scoreIdeaForChannel(idea: {
+  title: string;
+  hook?: string;
+  outline?: string;
+  format?: "long" | "short" | "either";
+}): Promise<{ score: number; modelUsed: string } | null> {
+  const snap = await fetchDmgSnapshot(50);
+  if ("error" in snap) return null;
+  const { channel, videos } = snap;
+
+  const top = [...videos].sort((a, b) => b.views - a.views).slice(0, 5);
+  const fmt = (v: VideoStats) =>
+    `- "${v.title.replace(/"/g, '\\"')}" · ${v.isShort ? "Short" : "Long"} · ${v.views.toLocaleString()} views`;
+
+  const todayIso = new Date().toISOString().slice(0, 10);
+  const system = [
+    `Today is ${todayIso}. Treat as the present.`,
+    `You are a YouTube content strategist for ${DMG_BRAND} (${DMG_HANDLE}).`,
+    "Score the supplied idea 1-10 for viral potential ON THIS CHANNEL specifically.",
+    "10 = unmissable banger. 7 = solid hit. 5 = mid. 3 = unlikely. 1 = misses the audience.",
+    "Be honest. Don't grade-inflate. One short sentence rationale is fine.",
+    'Return ONLY JSON: {"score": 7, "rationale": ""}',
+  ].join("\n");
+
+  const user = [
+    `Channel: ${channel.title} (${channel.handle})`,
+    channel.description ? `Identity: ${channel.description.slice(0, 300)}` : "",
+    `Subs: ${channel.subscribers.toLocaleString()}`,
+    "",
+    "TOP PERFORMERS (recent 50):",
+    top.map(fmt).join("\n"),
+    "",
+    "IDEA:",
+    `Title: ${idea.title}`,
+    idea.format ? `Format: ${idea.format}` : "",
+    idea.hook ? `Hook: ${idea.hook}` : "",
+    idea.outline ? `Outline:\n${idea.outline}` : "",
+  ]
+    .filter(Boolean)
+    .join("\n");
+
+  try {
+    const { data, modelUsed } = await chatJson<{ score: number }>({
+      model: MODEL,
+      system,
+      user,
+      temperature: 0.2,
+    });
+    const s = typeof data?.score === "number" ? data.score : 0;
+    if (s < 1 || s > 10) return null;
+    return { score: Math.round(s), modelUsed };
+  } catch {
+    return null;
+  }
 }
 
 export type IdeaListFilters = {
@@ -199,6 +264,7 @@ export async function deleteIdea(id: string) {
 
 export async function createManualIdea(opts: {
   title: string;
+  submittedBy: string;
   hook?: string;
   outline?: string;
   format?: "long" | "short" | "either";
@@ -225,6 +291,7 @@ export async function createManualIdea(opts: {
       format: opts.format ?? "either",
       tags: (opts.tags ?? []).slice(0, 8),
       source: "manual",
+      submittedBy: opts.submittedBy.slice(0, 60),
     },
   });
 }

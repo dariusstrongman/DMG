@@ -50,6 +50,12 @@ export function ManualIdeaForm() {
         </button>
       </div>
       <input
+        name="submittedBy"
+        required
+        placeholder="Your name (so we know who added this)"
+        className="w-full bg-background border border-border rounded-md px-3 py-2 text-sm"
+      />
+      <input
         name="title"
         required
         placeholder="Title"
@@ -89,7 +95,7 @@ export function ManualIdeaForm() {
         className="inline-flex items-center gap-2 px-3 py-1.5 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 disabled:opacity-60"
       >
         {pending ? <Loader2 className="size-3.5 animate-spin" /> : <Plus className="size-3.5" />}
-        Save
+        {pending ? "Saving + AI scoring..." : "Save"}
       </button>
     </form>
   );

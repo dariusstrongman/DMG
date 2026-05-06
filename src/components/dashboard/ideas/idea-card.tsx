@@ -22,6 +22,8 @@ type IdeaRow = {
   tags: string[];
   status: "pending" | "accepted" | "rejected" | "produced";
   source: string;
+  submittedBy: string | null;
+  aiScore: number | null;
   modelUsed: string | null;
   createdAt: Date;
 };
@@ -84,11 +86,16 @@ export function IdeaCard({ idea }: { idea: IdeaRow }) {
               <span className={`text-[10px] font-mono uppercase tracking-wider ${FORMAT_STYLES[idea.format]}`}>
                 {idea.format === "either" ? "Long or Short" : idea.format === "long" ? "Long" : "Short"}
               </span>
-              {idea.source === "ai" && idea.modelUsed ? (
-                <span className="text-[10px] font-mono text-muted-foreground/70">{idea.modelUsed}</span>
+              {idea.aiScore !== null ? <ScoreBadge score={idea.aiScore} /> : null}
+              {idea.source === "ai" ? (
+                <span className="text-[10px] font-mono uppercase tracking-wider text-primary/80 px-1.5 py-0.5 rounded bg-primary/10 border border-primary/20">
+                  Generated
+                </span>
               ) : null}
-              {idea.source === "manual" ? (
-                <span className="text-[10px] font-mono text-muted-foreground/70">manual</span>
+              {idea.source === "manual" && idea.submittedBy ? (
+                <span className="text-[10px] font-mono text-muted-foreground/80">
+                  by <span className="text-foreground/90">{idea.submittedBy}</span>
+                </span>
               ) : null}
             </div>
             <h3 className="font-semibold text-base leading-snug">{idea.title}</h3>
@@ -193,6 +200,22 @@ export function IdeaCard({ idea }: { idea: IdeaRow }) {
         </ActionBtn>
       </div>
     </div>
+  );
+}
+
+function ScoreBadge({ score }: { score: number }) {
+  const tone =
+    score >= 8 ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-300" :
+    score >= 6 ? "border-blue-500/40 bg-blue-500/10 text-blue-300" :
+    score >= 4 ? "border-yellow-500/40 bg-yellow-500/10 text-yellow-300" :
+    "border-rose-500/40 bg-rose-500/10 text-rose-300";
+  return (
+    <span
+      title={`AI score · predicted viral potential for this channel`}
+      className={`inline-flex items-center gap-1 text-[10px] font-mono uppercase tracking-wider px-1.5 py-0.5 rounded border ${tone}`}
+    >
+      AI <span className="font-semibold">{score}/10</span>
+    </span>
   );
 }
 

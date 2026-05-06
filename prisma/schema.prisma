@@ -241,6 +241,14 @@ model VideoIdea {
   tags      String[]   @default([])
   status    IdeaStatus @default(pending)
   source    String     @default("ai") // "ai" | "manual"
+  // Name of the person who submitted this idea (manual entries only).
+  // Anyone with the dashboard password can submit; the name lets the
+  // owner see who's contributing.
+  submittedBy String?
+  // AI score 1-10 — predicted viral potential for this channel.
+  // Set during generation for AI ideas; set asynchronously after
+  // submission for manual ideas.
+  aiScore   Int?
   modelUsed String?
   ytVideoId String?
   createdAt DateTime   @default(now())

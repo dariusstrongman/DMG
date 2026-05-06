@@ -14,11 +14,21 @@ const DEFAULT_COUNT = 5;
 type GeneratedIdea = {
   title: string;
   hook: string;
-  outline: string;
+  outline: string | string[];
   rationale: string;
   format: "long" | "short" | "either";
   tags: string[];
 };
+
+// Models often return outline as an array of bullets even when asked
+// for a string. Normalize to a single newline-joined string.
+function normalizeOutline(o: unknown): string {
+  if (Array.isArray(o)) {
+    return o.map((line) => `- ${String(line).trim()}`).join("\n");
+  }
+  if (typeof o === "string") return o;
+  return "";
+}
 
 type GenerateResponse = { ideas: GeneratedIdea[] };
 
@@ -114,9 +124,9 @@ export async function generateIdeas(count: number = DEFAULT_COUNT) {
         data: {
           channelId: channelRow.id,
           title: idea.title?.slice(0, 200) ?? "Untitled idea",
-          hook: idea.hook ?? "",
-          outline: idea.outline ?? "",
-          rationale: idea.rationale ?? "",
+          hook: typeof idea.hook === "string" ? idea.hook : String(idea.hook ?? ""),
+          outline: normalizeOutline(idea.outline),
+          rationale: typeof idea.rationale === "string" ? idea.rationale : "",
           format:
             idea.format === "long" || idea.format === "short" || idea.format === "either"
               ? idea.format

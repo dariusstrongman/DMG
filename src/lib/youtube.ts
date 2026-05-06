@@ -189,7 +189,22 @@ export async function getRecentUploads(
       }>;
     }>("videos", { part: "snippet,statistics,contentDetails", id: batch });
 
-    for (const v of resp.items ?? []) {
+    // Resolve true Short/Long status per video. The Data API doesn't
+    // expose this; we probe `youtube.com/shorts/<id>` and look at the
+    // redirect: 200 = real Short, 3xx redirect to /watch = Long. Cached
+    // per-video so we only probe each video once per day.
+    const items = resp.items ?? [];
+    const shortFlags = await Promise.all(
+      items.map(async (v) => {
+        const dur = parseISO8601Duration(v.contentDetails.duration);
+        // Anything over 3 minutes can't be a Short. Skip the probe.
+        if (dur > 180) return false;
+        return await isShortViaRedirect(v.id, dur);
+      })
+    );
+
+    for (let i = 0; i < items.length; i++) {
+      const v = items[i];
       const durationSec = parseISO8601Duration(v.contentDetails.duration);
       const views = Number(v.statistics.viewCount ?? 0);
       const likes = Number(v.statistics.likeCount ?? 0);
@@ -205,12 +220,7 @@ export async function getRecentUploads(
           "",
         publishedAt: v.snippet.publishedAt,
         durationSec,
-        // YouTube raised the Shorts cap to 3 minutes (180s) in 2024.
-        // The Data API doesn't expose an `isShort` flag, so duration is
-        // our best heuristic. Aspect ratio would be more accurate, but
-        // it isn't returned by the Data API. False positives are rare:
-        // most long-form videos run well over 3 minutes.
-        isShort: durationSec <= 180,
+        isShort: shortFlags[i],
         views,
         likes,
         comments,
@@ -240,6 +250,38 @@ export async function fetchDmgSnapshot(maxVideos = 50): Promise<DmgSnapshot | { 
 }
 
 // ─────────── Helpers ───────────
+
+// Probe youtube.com/shorts/<id> with redirect: manual. A 200 means
+// YouTube serves the Shorts player, so it's a real Short. Any 3xx
+// redirect (typically to /watch) means it's a regular video.
+//
+// Cached per-video for 24h via Next.js fetch cache, so we only probe
+// each video once a day even if the dashboard is loaded constantly.
+//
+// `fallbackDurationSec` is used if the probe fails (network glitch,
+// YouTube changes behavior). ≤180s → assume Short, otherwise Long.
+async function isShortViaRedirect(
+  videoId: string,
+  fallbackDurationSec: number
+): Promise<boolean> {
+  try {
+    const res = await fetch(`https://www.youtube.com/shorts/${videoId}`, {
+      method: "GET",
+      redirect: "manual",
+      headers: {
+        // Without a UA, YouTube sometimes serves a different response.
+        "User-Agent":
+          "Mozilla/5.0 (compatible; DMGAnalytics/1.0; +https://dmg.stromation.com)",
+      },
+      next: { revalidate: 86_400 },
+    });
+    if (res.status === 200) return true;
+    if (res.status >= 300 && res.status < 400) return false;
+  } catch {
+    // ignore; fall through to duration heuristic
+  }
+  return fallbackDurationSec <= 180;
+}
 
 // "PT15M30S" → 930. Handles hours/minutes/seconds, including missing parts.
 export function parseISO8601Duration(iso: string): number {

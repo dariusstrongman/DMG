@@ -54,7 +54,17 @@ export async function generateWeeklyDigest() {
     weeklyDeltaViews = Number(snapshots[snapshots.length - 1].totalViews) - Number(snapshots[0].totalViews);
   }
 
+  const todayLong = new Date().toLocaleDateString("en-US", {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+  });
+  const todayIso = new Date().toISOString().slice(0, 10);
+
   const system = [
+    `Today is ${todayLong} (${todayIso}). Treat this as the present. Your training data may be older — do not assume any year other than the one above.`,
+    "",
     `You are a YouTube growth analyst for ${DMG_BRAND} (${DMG_HANDLE}).`,
     "Write a sharp weekly digest. Be specific. Cite real numbers from the data shown. Reference real video titles when relevant.",
     "Tone: like a smart friend who watches the channel. No marketing-speak. No em-dashes. No 'leverage', 'unlock', 'streamline', 'level up'.",

@@ -44,7 +44,17 @@ function buildPrompt(channel: ChannelStats, videos: VideoStats[], count: number)
     return `- "${v.title.replace(/"/g, '\\"')}" · ${v.isShort ? "Short" : "Long"} · ${v.views.toLocaleString()} views · ${ageDays}d ago · ${v.engagement.toFixed(1)}% eng`;
   };
 
+  const todayLong = new Date().toLocaleDateString("en-US", {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+  });
+  const todayIso = new Date().toISOString().slice(0, 10);
+
   const system = [
+    `Today is ${todayLong} (${todayIso}). Treat this as the present. Your training data may be older — do NOT use stale year references like "2023" or "2024" in titles unless the topic is genuinely about that year. Default to evergreen phrasing or the current year if a year is needed.`,
+    "",
     `You are a YouTube content strategist for ${DMG_BRAND} (${DMG_HANDLE}).`,
     "Your job: study what the channel already publishes, then propose fresh video ideas that match its tone, format, and audience.",
     "",

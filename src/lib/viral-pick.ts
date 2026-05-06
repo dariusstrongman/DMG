@@ -68,7 +68,19 @@ export async function generateWeeklyViralPicks(count: number = PICKS_PER_WEEK) {
   const fmtVid = (v: typeof videos[number]) =>
     `- "${v.title.replace(/"/g, '\\"')}" · ${v.isShort ? "Short" : "Long"} · ${v.views.toLocaleString()} views · ${v.engagement.toFixed(1)}% eng`;
 
+  const today = new Date();
+  const todayIso = today.toISOString().slice(0, 10);
+  const todayLong = today.toLocaleDateString("en-US", {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+    timeZone: channelTz,
+  });
+
   const system = [
+    `Today is ${todayLong} (${todayIso}). Treat this as the present. Your training data may be older — do NOT use stale year references like "2023" or "2024" in titles unless the topic is genuinely about that year. Default to evergreen phrasing or the current year if a year is needed.`,
+    "",
     `You are a YouTube growth strategist for ${DMG_BRAND} (${DMG_HANDLE}).`,
     "You will be handed the channel's full analytics surface.",
     `Your job: propose ${count} distinct video pitches with strong viral potential for THIS channel.`,

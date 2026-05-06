@@ -38,6 +38,7 @@ export async function recordVideoSnapshots(
         },
         update: {
           title: v.title,
+          format: ytFormat(v),
           views: BigInt(v.views),
           likes: BigInt(v.likes),
           comments: BigInt(v.comments),

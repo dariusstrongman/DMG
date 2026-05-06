@@ -205,7 +205,12 @@ export async function getRecentUploads(
           "",
         publishedAt: v.snippet.publishedAt,
         durationSec,
-        isShort: durationSec <= 60,
+        // YouTube raised the Shorts cap to 3 minutes (180s) in 2024.
+        // The Data API doesn't expose an `isShort` flag, so duration is
+        // our best heuristic. Aspect ratio would be more accurate, but
+        // it isn't returned by the Data API. False positives are rare:
+        // most long-form videos run well over 3 minutes.
+        isShort: durationSec <= 180,
         views,
         likes,
         comments,

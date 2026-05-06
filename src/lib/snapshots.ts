@@ -9,6 +9,7 @@
 import { db } from "./db";
 import type { ChannelStats, VideoStats } from "./youtube";
 import type { SubSnapshot } from "./projections";
+import { recordVideoSnapshots } from "./video-snapshots";
 
 const MIN_SNAPSHOT_INTERVAL_MS = 55 * 60 * 1000; // ~hourly
 
@@ -60,7 +61,8 @@ export async function recordChannelSnapshot(
         totalVideos: channel.totalVideos,
       },
     });
-    void videos; // reserved for future per-video snapshots
+
+    await recordVideoSnapshots(row.id, videos);
   } catch (err) {
     if (process.env.NODE_ENV !== "production") {
       console.warn("[snapshots] persistence skipped:", err);

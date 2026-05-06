@@ -3,15 +3,28 @@ import Link from "next/link";
 import Image from "next/image";
 import { fetchDmgSnapshot } from "@/lib/youtube";
 import { formatNumber, formatDuration, timeAgo } from "@/lib/utils";
-import { ExternalLink } from "lucide-react";
+import { ExternalLink, TrendingUp } from "lucide-react";
+import { getVideoSpikes24h } from "@/lib/video-snapshots";
 
 export const metadata = { title: "Videos" };
 export const dynamic = "force-dynamic";
-export const revalidate = 300;
 
-export default async function VideosPage() {
+type FormatFilter = "all" | "long" | "short";
+
+function isFormatFilter(s: string | undefined): s is FormatFilter {
+  return s === "all" || s === "long" || s === "short";
+}
+
+export default async function VideosPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ format?: string; sort?: string }>;
+}) {
+  const sp = await searchParams;
+  const format: FormatFilter = isFormatFilter(sp.format) ? sp.format : "all";
+  const sort = sp.sort === "views" ? "views" : "recent";
+
   const snap = await fetchDmgSnapshot(50);
-
   if ("error" in snap) {
     return (
       <Card className="max-w-2xl mx-auto">
@@ -20,11 +33,9 @@ export default async function VideosPage() {
           <CardTitle>YouTube API key not configured</CardTitle>
         </CardHeader>
         <CardContent className="text-sm text-muted-foreground">
-          <p className="font-mono text-xs bg-secondary border border-border rounded-md p-3">
-            {snap.error}
-          </p>
+          <p className="font-mono text-xs bg-secondary border border-border rounded-md p-3">{snap.error}</p>
           <p className="mt-3">
-            Head back to <Link href="/dashboard" className="text-primary underline">the overview</Link> for setup instructions.
+            Head back to <Link href="/dashboard" className="text-primary underline">the overview</Link>.
           </p>
         </CardContent>
       </Card>
@@ -32,6 +43,24 @@ export default async function VideosPage() {
   }
 
   const { channel, videos } = snap;
+  const filtered =
+    format === "long"
+      ? videos.filter((v) => !v.isShort)
+      : format === "short"
+      ? videos.filter((v) => v.isShort)
+      : videos;
+  const sorted =
+    sort === "views"
+      ? [...filtered].sort((a, b) => b.views - a.views)
+      : filtered;
+
+  const spikes = await getVideoSpikes24h(filtered.map((v) => v.id));
+
+  const counts = {
+    all: videos.length,
+    long: videos.filter((v) => !v.isShort).length,
+    short: videos.filter((v) => v.isShort).length,
+  };
 
   return (
     <div className="max-w-7xl mx-auto space-y-6 animate-rise">
@@ -41,8 +70,44 @@ export default async function VideosPage() {
         </p>
         <h1 className="text-3xl font-semibold tracking-tight">All uploads</h1>
         <p className="text-muted-foreground mt-1">
-          Latest {videos.length} videos. Sorted by publish date — newest first.
+          Latest {videos.length} videos. Click a row to drill in.
         </p>
+      </div>
+
+      {/* Filter tabs + sort */}
+      <div className="flex items-center gap-1 flex-wrap border-b border-border">
+        {(["all", "long", "short"] as const).map((f) => (
+          <Link
+            key={f}
+            href={`/dashboard/videos?format=${f}${sort !== "recent" ? `&sort=${sort}` : ""}`}
+            className={`px-3 py-2 text-sm border-b-2 -mb-px transition ${
+              format === f
+                ? "border-primary text-foreground"
+                : "border-transparent text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            {f === "all" ? "All" : f === "long" ? "Long-form" : "Shorts"}
+            <span className="ml-1.5 text-xs font-mono text-muted-foreground/70 tabular-nums">
+              {counts[f]}
+            </span>
+          </Link>
+        ))}
+        <div className="ml-auto flex items-center gap-1 text-xs font-mono text-muted-foreground">
+          Sort:
+          <Link
+            href={`/dashboard/videos?format=${format}&sort=recent`}
+            className={sort === "recent" ? "text-foreground underline" : "hover:text-foreground"}
+          >
+            Recent
+          </Link>
+          <span>·</span>
+          <Link
+            href={`/dashboard/videos?format=${format}&sort=views`}
+            className={sort === "views" ? "text-foreground underline" : "hover:text-foreground"}
+          >
+            Views
+          </Link>
+        </div>
       </div>
 
       <Card className="overflow-hidden">
@@ -54,52 +119,59 @@ export default async function VideosPage() {
                 <th className="text-left px-4 py-3 font-medium">Published</th>
                 <th className="text-left px-4 py-3 font-medium">Length</th>
                 <th className="text-right px-4 py-3 font-medium">Views</th>
+                <th className="text-right px-4 py-3 font-medium">24h</th>
                 <th className="text-right px-4 py-3 font-medium">Likes</th>
-                <th className="text-right px-4 py-3 font-medium">Comments</th>
                 <th className="text-right px-4 py-3 font-medium">Engagement</th>
                 <th className="px-2 py-3"></th>
               </tr>
             </thead>
             <tbody>
-              {videos.map((v) => (
-                <tr key={v.id} className="border-b border-border/50 hover:bg-secondary/30 transition">
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-3 min-w-0">
-                      <div className="relative w-24 aspect-video shrink-0 rounded overflow-hidden bg-secondary">
-                        <Image src={v.thumbnailUrl} alt={v.title} fill className="object-cover" />
-                      </div>
-                      <div className="min-w-0">
-                        <div className="font-medium line-clamp-2">{v.title}</div>
-                        <div className="text-xs text-muted-foreground mt-0.5">
-                          {v.isShort ? "Short" : "Long-form"}
+              {sorted.map((v) => {
+                const spike = spikes[v.id];
+                return (
+                  <tr key={v.id} className="border-b border-border/50 hover:bg-secondary/30 transition">
+                    <td className="px-4 py-3">
+                      <Link href={`/dashboard/videos/${v.id}`} className="flex items-center gap-3 min-w-0 group">
+                        <div className="relative w-24 aspect-video shrink-0 rounded overflow-hidden bg-secondary">
+                          <Image src={v.thumbnailUrl} alt={v.title} fill className="object-cover" />
                         </div>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">
-                    {timeAgo(v.publishedAt)}
-                  </td>
-                  <td className="px-4 py-3 font-mono text-xs whitespace-nowrap">
-                    {formatDuration(v.durationSec)}
-                  </td>
-                  <td className="px-4 py-3 text-right tabular-nums">{formatNumber(v.views)}</td>
-                  <td className="px-4 py-3 text-right tabular-nums">{formatNumber(v.likes)}</td>
-                  <td className="px-4 py-3 text-right tabular-nums">{formatNumber(v.comments)}</td>
-                  <td className="px-4 py-3 text-right tabular-nums">
-                    {v.engagement.toFixed(2)}%
-                  </td>
-                  <td className="px-2 py-3">
-                    <Link
-                      href={`https://youtube.com/watch?v=${v.id}`}
-                      target="_blank"
-                      className="text-muted-foreground hover:text-primary transition inline-flex"
-                      aria-label="Open on YouTube"
-                    >
-                      <ExternalLink className="size-4" />
-                    </Link>
-                  </td>
-                </tr>
-              ))}
+                        <div className="min-w-0">
+                          <div className="font-medium line-clamp-2 group-hover:text-primary transition">{v.title}</div>
+                          <div className="text-xs text-muted-foreground mt-0.5">
+                            {v.isShort ? "Short" : "Long-form"}
+                          </div>
+                        </div>
+                      </Link>
+                    </td>
+                    <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">{timeAgo(v.publishedAt)}</td>
+                    <td className="px-4 py-3 font-mono text-xs whitespace-nowrap">{formatDuration(v.durationSec)}</td>
+                    <td className="px-4 py-3 text-right tabular-nums">{formatNumber(v.views)}</td>
+                    <td className="px-4 py-3 text-right tabular-nums">
+                      {spike === null ? (
+                        <span className="text-muted-foreground/50">—</span>
+                      ) : spike > 0 ? (
+                        <span className="inline-flex items-center gap-0.5 text-emerald-300">
+                          <TrendingUp className="size-3" />+{formatNumber(spike)}
+                        </span>
+                      ) : (
+                        <span className="text-muted-foreground">{formatNumber(spike)}</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-right tabular-nums">{formatNumber(v.likes)}</td>
+                    <td className="px-4 py-3 text-right tabular-nums">{v.engagement.toFixed(2)}%</td>
+                    <td className="px-2 py-3">
+                      <Link
+                        href={`https://youtube.com/watch?v=${v.id}`}
+                        target="_blank"
+                        className="text-muted-foreground hover:text-primary transition inline-flex"
+                        aria-label="Open on YouTube"
+                      >
+                        <ExternalLink className="size-4" />
+                      </Link>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>

@@ -138,7 +138,23 @@ model Competitor {
   notes        String?  @db.Text
   createdAt    DateTime @default(now())
 
+  snapshots CompetitorSnapshot[]
+
   @@map("dmg_competitors")
+}
+
+model CompetitorSnapshot {
+  id           String   @id @default(cuid())
+  competitorId String
+  capturedAt   DateTime @default(now())
+  subscribers  BigInt
+  totalViews   BigInt
+  totalVideos  Int
+
+  competitor Competitor @relation(fields: [competitorId], references: [id], onDelete: Cascade)
+
+  @@index([competitorId, capturedAt])
+  @@map("dmg_competitor_snapshots")
 }
 
 // ─────────── AI REPORTS ───────────

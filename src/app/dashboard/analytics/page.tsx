@@ -3,7 +3,13 @@ import Link from "next/link";
 import { fetchDmgSnapshot } from "@/lib/youtube";
 import { formatNumber, formatDuration } from "@/lib/utils";
 import { CadenceChart, EngagementScatter, ViewsBarChart } from "./analytics-charts";
-import { Activity, Sparkles } from "lucide-react";
+import { Sparkles } from "lucide-react";
+import { BestPostingTimes } from "@/components/dashboard/best-posting-times";
+import { FormatComparison } from "@/components/dashboard/format-comparison";
+import { SubHistoryChart } from "@/components/dashboard/sub-history-chart";
+import { getSubscriberHistory } from "@/lib/snapshots";
+import { project, projectedLine } from "@/lib/projections";
+import { SUBSCRIBER_GOAL } from "@/lib/config";
 
 export const metadata = { title: "Analytics" };
 export const dynamic = "force-dynamic";
@@ -32,6 +38,26 @@ export default async function AnalyticsPage() {
   }
 
   const { channel, videos } = snap;
+
+  // Subscriber history for the time-series chart.
+  const history = await getSubscriberHistory(channel.id, 90);
+  const liveSeed =
+    history.length === 0
+      ? [{ subscribers: channel.subscribers, capturedAt: new Date() }]
+      : history;
+  const proj = project(liveSeed, SUBSCRIBER_GOAL);
+  const primaryPace =
+    proj.pace30d.perDay && proj.pace30d.perDay > 0
+      ? proj.pace30d.perDay
+      : proj.paceLifetime.perDay && proj.paceLifetime.perDay > 0
+      ? proj.paceLifetime.perDay
+      : null;
+  const projLine = primaryPace
+    ? projectedLine(channel.subscribers, primaryPace, SUBSCRIBER_GOAL).map((p) => ({
+        capturedAt: p.capturedAt.toISOString(),
+        subscribers: p.subscribers,
+      }))
+    : [];
 
   // Aggregates.
   const totalViewsInWindow = videos.reduce((s, v) => s + v.views, 0);
@@ -68,6 +94,29 @@ export default async function AnalyticsPage() {
         <Kpi label="Avg views / video" value={formatNumber(avgViews)} />
         <Kpi label="Avg engagement" value={`${avgEngagement.toFixed(2)}%`} />
         <Kpi label="Avg duration" value={formatDuration(avgDuration)} />
+      </div>
+
+      {/* Subscriber trend over time */}
+      <div>
+        <h2 className="text-sm font-mono uppercase tracking-widest text-muted-foreground mb-3">
+          Subscribers · 90d + projection
+        </h2>
+        <SubHistoryChart
+          history={history.map((h) => ({
+            capturedAt: h.capturedAt.toISOString(),
+            subscribers: h.subscribers,
+          }))}
+          projected={projLine}
+          goal={SUBSCRIBER_GOAL}
+        />
+      </div>
+
+      {/* Best time to post + format split */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <div className="lg:col-span-2">
+          <BestPostingTimes videos={videos} />
+        </div>
+        <FormatComparison videos={videos} />
       </div>
 
       {/* Mix + top */}
@@ -177,20 +226,6 @@ export default async function AnalyticsPage() {
           </CardContent>
         </Card>
       </div>
-
-      <Card className="bg-primary/5 border-primary/20">
-        <CardContent className="flex items-start gap-3 pt-6">
-          <Activity className="size-5 text-primary shrink-0 mt-0.5" />
-          <div className="text-sm">
-            <p className="font-medium">Time-series charts unlock with daily snapshots.</p>
-            <p className="text-muted-foreground mt-1">
-              Subscribers-over-time, view velocity, and CTR trends need the
-              dashboard to record a snapshot once per day. We'll add that with a
-              cron job — no manual work.
-            </p>
-          </div>
-        </CardContent>
-      </Card>
 
       <p className="text-xs text-muted-foreground font-mono">
         Likes &amp; comments: {formatNumber(totalLikes)} / {formatNumber(totalComments)} across the window.

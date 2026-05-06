@@ -12,8 +12,11 @@ generator client {
 
 datasource db {
   provider  = "postgresql"
+  // Vercel + Neon integration injects DATABASE_URL (pooled, pgbouncer)
+  // and DATABASE_URL_UNPOOLED (direct, for migrations). Falling back
+  // to DIRECT_URL keeps a non-Vercel setup working too.
   url       = env("DATABASE_URL")
-  directUrl = env("DIRECT_URL")
+  directUrl = env("DATABASE_URL_UNPOOLED")
 }
 
 // ─────────── YOUTUBE CHANNELS ───────────

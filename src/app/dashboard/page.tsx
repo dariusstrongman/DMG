@@ -1,135 +1,238 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Sparkles, Plus, Youtube, ArrowRight } from "lucide-react";
+import { ArrowUpRight, Eye, Film, PlayCircle, Users } from "lucide-react";
 import Link from "next/link";
+import Image from "next/image";
+import { fetchDmgSnapshot } from "@/lib/youtube";
+import { DMG_HANDLE } from "@/lib/config";
+import { formatNumber, formatDuration, timeAgo } from "@/lib/utils";
 
-export default function DashboardOverview() {
+export const dynamic = "force-dynamic";
+export const revalidate = 300;
+
+export default async function DashboardOverview() {
+  const snap = await fetchDmgSnapshot(12);
+
+  if ("error" in snap) {
+    return <SetupRequired error={snap.error} />;
+  }
+
+  const { channel, videos } = snap;
+  const recent = videos.slice(0, 6);
+  const latestUpload = videos[0];
+  const last30 = videos.filter(
+    (v) => Date.now() - +new Date(v.publishedAt) < 30 * 24 * 60 * 60 * 1000
+  );
+  const avgViews30d =
+    last30.length > 0 ? Math.round(last30.reduce((s, v) => s + v.views, 0) / last30.length) : 0;
+
   return (
     <div className="max-w-6xl mx-auto space-y-8 animate-rise">
-      <div>
-        <p className="text-xs font-mono uppercase tracking-widest text-muted-foreground mb-2">
-          DMG Analytics
-        </p>
-        <h1 className="text-3xl font-semibold tracking-tight">
-          Channel dashboard.
-        </h1>
-        <p className="text-muted-foreground mt-1">
-          Connect the DMG channel to see real-time analytics and AI insights.
-        </p>
-      </div>
-
-      <Card className="overflow-hidden">
-        <div className="relative">
-          <div
-            className="absolute inset-0 bg-[radial-gradient(circle_at_85%_15%,hsl(var(--primary)/0.18),transparent_50%)]"
-            aria-hidden
+      {/* Header */}
+      <div className="flex items-start gap-4">
+        {channel.thumbnailUrl ? (
+          <Image
+            src={channel.thumbnailUrl}
+            alt={channel.title}
+            width={56}
+            height={56}
+            className="rounded-full ring-1 ring-border"
           />
-          <div className="relative p-6 sm:p-8 flex flex-col sm:flex-row gap-6 items-start sm:items-center">
-            <div className="size-14 rounded-xl bg-secondary grid place-items-center shrink-0">
-              <Youtube className="size-7 text-primary" />
-            </div>
-            <div className="flex-1">
-              <h2 className="text-xl font-semibold">Connect the DMG YouTube channel</h2>
-              <p className="text-muted-foreground mt-1 max-w-xl">
-                Authorize once. We'll pull channel info, recent videos, and start
-                tracking analytics. Only the scopes we need.
-              </p>
-            </div>
-            <Button size="lg" disabled title="OAuth flow ships in Pass 2">
-              <Plus className="size-4" />
-              Connect channel
-            </Button>
-          </div>
-        </div>
-      </Card>
-
-      <div>
-        <h2 className="text-sm font-mono uppercase tracking-widest text-muted-foreground mb-4">
-          Coming in Pass 2
-        </h2>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          <PreviewCard
-            title="Real-time KPIs"
-            text="Subscribers, views, watch-time, CTR, average view duration, returning viewers."
-          />
-          <PreviewCard
-            title="Live charts"
-            text="Growth over time, top videos, traffic sources, geo, devices, retention trends."
-          />
-          <PreviewCard
-            title="AI virality scoring"
-            icon={<Sparkles className="size-4 text-primary" />}
-            text="Score titles, hooks, and thumbnails before publishing. Get concrete suggestions."
-          />
-          <PreviewCard
-            title="Retention analyzer"
-            text="Upload transcript, see timestamped drop-off predictions and edit recommendations."
-          />
-          <PreviewCard
-            title="Competitor tracker"
-            text="Watch any channel — cadence, top videos, growth curve, thumbnail patterns."
-          />
-          <PreviewCard
-            title="Automations"
-            text="Discord webhook on viral spike. Email report weekly. CTR-drop alert."
-          />
+        ) : null}
+        <div className="flex-1">
+          <p className="text-xs font-mono uppercase tracking-widest text-muted-foreground mb-1">
+            {channel.handle}
+          </p>
+          <h1 className="text-3xl font-semibold tracking-tight">{channel.title}</h1>
+          {channel.description ? (
+            <p className="text-muted-foreground mt-1 max-w-2xl line-clamp-2">
+              {channel.description}
+            </p>
+          ) : null}
         </div>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Set up checklist</CardTitle>
-          <CardDescription>
-            Once these are configured, the connect-channel button comes alive.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-3 text-sm">
-          <Item done text="Password gate live (you're past it)" />
-          <Item text="Add YouTube Data API v3 key to .env.local (YOUTUBE_API_KEY)" />
-          <Item text="Configure Google OAuth client for YouTube (Pass 2 scope flow)" />
-          <Item text="Run database migration (npm run db:push)" />
-          <Item text="Deploy to Vercel + point dmg.stromation.com at it" />
-          <div className="pt-2">
-            <Link href="https://github.com/dariusstrongman/DMG#setup" className="inline-flex items-center gap-1.5 text-primary hover:underline">
-              Setup guide in README
-              <ArrowRight className="size-3.5" />
+      {/* KPIs */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <Kpi
+          icon={<Users className="size-4" />}
+          label="Subscribers"
+          value={channel.hiddenSubscriberCount ? "Hidden" : formatNumber(channel.subscribers)}
+        />
+        <Kpi
+          icon={<Eye className="size-4" />}
+          label="Total views"
+          value={formatNumber(channel.totalViews)}
+        />
+        <Kpi
+          icon={<Film className="size-4" />}
+          label="Videos"
+          value={formatNumber(channel.totalVideos)}
+        />
+        <Kpi
+          icon={<PlayCircle className="size-4" />}
+          label="Avg views (last 30d)"
+          value={formatNumber(avgViews30d)}
+          sub={`${last30.length} upload${last30.length === 1 ? "" : "s"}`}
+        />
+      </div>
+
+      {/* Latest video */}
+      {latestUpload ? (
+        <Card>
+          <CardHeader>
+            <CardDescription className="font-mono uppercase tracking-widest text-xs">
+              Latest upload
+            </CardDescription>
+            <CardTitle className="text-base">{latestUpload.title}</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex flex-col sm:flex-row gap-4">
+              <Link
+                href={`https://youtube.com/watch?v=${latestUpload.id}`}
+                target="_blank"
+                className="relative shrink-0 group"
+              >
+                <Image
+                  src={latestUpload.thumbnailUrl}
+                  alt={latestUpload.title}
+                  width={320}
+                  height={180}
+                  className="rounded-lg ring-1 ring-border group-hover:ring-primary transition"
+                />
+                <div className="absolute bottom-2 right-2 px-1.5 py-0.5 rounded bg-black/80 text-xs font-mono">
+                  {formatDuration(latestUpload.durationSec)}
+                </div>
+              </Link>
+              <div className="flex-1 grid grid-cols-3 gap-3 sm:gap-4 self-center">
+                <Stat label="Views" value={formatNumber(latestUpload.views)} />
+                <Stat label="Likes" value={formatNumber(latestUpload.likes)} />
+                <Stat label="Comments" value={formatNumber(latestUpload.comments)} />
+                <Stat label="Engagement" value={`${latestUpload.engagement.toFixed(2)}%`} />
+                <Stat label="Published" value={timeAgo(latestUpload.publishedAt)} />
+                <Stat label="Format" value={latestUpload.isShort ? "Short" : "Long"} />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {/* Recent uploads grid */}
+      {recent.length > 1 ? (
+        <div>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-sm font-mono uppercase tracking-widest text-muted-foreground">
+              Recent uploads
+            </h2>
+            <Link
+              href="/dashboard/videos"
+              className="text-sm text-primary hover:underline inline-flex items-center gap-1"
+            >
+              All videos <ArrowUpRight className="size-3.5" />
             </Link>
           </div>
-        </CardContent>
-      </Card>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {recent.slice(1).map((v) => (
+              <VideoTile key={v.id} v={v} />
+            ))}
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
 
-function PreviewCard({
-  title,
-  text,
-  icon
+function Kpi({
+  icon,
+  label,
+  value,
+  sub,
 }: {
-  title: string;
-  text: string;
-  icon?: React.ReactNode;
+  icon: React.ReactNode;
+  label: string;
+  value: string;
+  sub?: string;
 }) {
   return (
     <div className="glass rounded-xl p-5">
-      <div className="flex items-center gap-2 mb-2">
+      <div className="flex items-center gap-2 text-muted-foreground text-xs font-mono uppercase tracking-widest mb-2">
         {icon}
-        <h3 className="font-semibold text-sm">{title}</h3>
+        {label}
       </div>
-      <p className="text-sm text-muted-foreground leading-relaxed">{text}</p>
+      <div className="text-2xl font-semibold tracking-tight">{value}</div>
+      {sub ? <div className="text-xs text-muted-foreground mt-1">{sub}</div> : null}
     </div>
   );
 }
 
-function Item({ done, text }: { done?: boolean; text: string }) {
+function Stat({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex items-start gap-2.5">
-      <div
-        className={`size-4 rounded-full mt-0.5 shrink-0 ${
-          done ? "bg-success" : "border border-border"
-        }`}
-      />
-      <span className={done ? "text-foreground/90" : "text-muted-foreground"}>{text}</span>
+    <div>
+      <div className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground">
+        {label}
+      </div>
+      <div className="text-base font-semibold mt-0.5">{value}</div>
+    </div>
+  );
+}
+
+function VideoTile({ v }: { v: { id: string; title: string; thumbnailUrl: string; views: number; publishedAt: string; durationSec: number } }) {
+  return (
+    <Link
+      href={`https://youtube.com/watch?v=${v.id}`}
+      target="_blank"
+      className="glass rounded-xl overflow-hidden block group hover:ring-1 hover:ring-primary transition"
+    >
+      <div className="relative aspect-video bg-secondary">
+        <Image src={v.thumbnailUrl} alt={v.title} fill className="object-cover" />
+        <div className="absolute bottom-2 right-2 px-1.5 py-0.5 rounded bg-black/80 text-xs font-mono">
+          {formatDuration(v.durationSec)}
+        </div>
+      </div>
+      <div className="p-3">
+        <div className="font-medium text-sm line-clamp-2 group-hover:text-primary transition">
+          {v.title}
+        </div>
+        <div className="text-xs text-muted-foreground mt-1.5 flex items-center gap-2">
+          <span>{formatNumber(v.views)} views</span>
+          <span>·</span>
+          <span>{timeAgo(v.publishedAt)}</span>
+        </div>
+      </div>
+    </Link>
+  );
+}
+
+function SetupRequired({ error }: { error: string }) {
+  return (
+    <div className="max-w-2xl mx-auto animate-rise">
+      <Card>
+        <CardHeader>
+          <CardDescription className="font-mono uppercase tracking-widest text-xs text-yellow-400">
+            Setup needed
+          </CardDescription>
+          <CardTitle>Can't reach the YouTube API</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4 text-sm text-muted-foreground">
+          <p className="text-foreground/90 font-mono text-xs bg-secondary rounded-md p-3 border border-border">
+            {error}
+          </p>
+          <ol className="list-decimal pl-5 space-y-2">
+            <li>
+              Go to <Link className="text-primary underline" target="_blank" href="https://console.cloud.google.com/apis/credentials">Google Cloud → Credentials</Link>, create an API key.
+            </li>
+            <li>
+              Restrict it to <span className="font-mono text-foreground/90">YouTube Data API v3</span>.
+            </li>
+            <li>
+              Add to <span className="font-mono text-foreground/90">.env.local</span>:
+              <pre className="mt-1 bg-secondary rounded-md p-3 text-xs font-mono text-foreground/90 border border-border">YOUTUBE_API_KEY=AIza...</pre>
+            </li>
+            <li>
+              Restart the dev server. Currently tracking <span className="font-mono text-foreground/90">{DMG_HANDLE}</span>.
+            </li>
+          </ol>
+        </CardContent>
+      </Card>
     </div>
   );
 }

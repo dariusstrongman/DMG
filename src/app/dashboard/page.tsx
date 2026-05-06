@@ -130,7 +130,7 @@ export default async function DashboardOverview() {
         <Kpi
           icon={<Users className="size-4" />}
           label="Subscribers"
-          value={channel.hiddenSubscriberCount ? "Hidden" : formatNumber(channel.subscribers)}
+          value={channel.hiddenSubscriberCount ? "Hidden" : channel.subscribers.toLocaleString()}
         />
         <Kpi
           icon={<Eye className="size-4" />}

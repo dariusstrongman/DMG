@@ -35,9 +35,9 @@ export function GoalTracker({
         </CardDescription>
         <CardTitle className="flex items-baseline gap-3">
           <span className="text-3xl font-semibold tabular-nums">
-            {formatNumber(p.current)}
+            {p.current.toLocaleString()}
           </span>
-          <span className="text-base text-muted-foreground">/ {formatNumber(p.goal)} subs</span>
+          <span className="text-base text-muted-foreground">/ {p.goal.toLocaleString()} subs</span>
           {p.goalReached ? (
             <span className="ml-auto px-2 py-0.5 rounded text-xs font-mono bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
               Goal reached
@@ -56,7 +56,7 @@ export function GoalTracker({
           </div>
           <div className="flex justify-between mt-1.5 text-xs text-muted-foreground font-mono">
             <span>{p.progressPct.toFixed(1)}% there</span>
-            <span>{formatNumber(p.remaining)} to go</span>
+            <span>{p.remaining.toLocaleString()} to go</span>
           </div>
         </div>
 

@@ -10,3 +10,7 @@ export const SUBSCRIBER_GOAL = 10_000;
 // Optional ISO date (yyyy-mm-dd) for "on pace / behind / ahead" framing.
 // Leave null to just show ETA without pass/fail framing.
 export const SUBSCRIBER_GOAL_DEADLINE: string | null = null;
+
+// Used by analytics to show day-of-week / hour-of-day in local time
+// instead of UTC. IANA timezone string. Change if you move.
+export const CHANNEL_TIMEZONE = "America/Chicago";

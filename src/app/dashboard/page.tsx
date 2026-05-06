@@ -3,20 +3,67 @@ import { ArrowUpRight, Eye, Film, PlayCircle, Users } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
 import { fetchDmgSnapshot } from "@/lib/youtube";
-import { DMG_HANDLE } from "@/lib/config";
+import { DMG_HANDLE, SUBSCRIBER_GOAL } from "@/lib/config";
 import { formatNumber, formatDuration, timeAgo } from "@/lib/utils";
+import {
+  recordChannelSnapshot,
+  getSubscriberHistory,
+  getChannelDeltas,
+} from "@/lib/snapshots";
+import { project, projectedLine } from "@/lib/projections";
+import { GoalTracker } from "@/components/dashboard/goal-tracker";
+import { VelocityStrip } from "@/components/dashboard/velocity-strip";
+import { SubHistoryChart } from "@/components/dashboard/sub-history-chart";
+import { TopPerformers } from "@/components/dashboard/top-performers";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 300;
 
 export default async function DashboardOverview() {
-  const snap = await fetchDmgSnapshot(12);
+  const snap = await fetchDmgSnapshot(50);
 
   if ("error" in snap) {
     return <SetupRequired error={snap.error} />;
   }
 
   const { channel, videos } = snap;
+
+  // Persist a snapshot (throttled to ~1/hour) so projections have history.
+  // Fire-and-forget shape: failures are swallowed inside the helper.
+  await recordChannelSnapshot(channel, videos);
+
+  const [history, deltas] = await Promise.all([
+    getSubscriberHistory(channel.id, 90),
+    getChannelDeltas(channel.id),
+  ]);
+
+  // If DB is empty but we have a current count, seed history with the
+  // live point so the projection card shows a sensible "current" value.
+  const liveSeed =
+    history.length === 0
+      ? [{ subscribers: channel.subscribers, capturedAt: new Date() }]
+      : history;
+  const projection = project(liveSeed, SUBSCRIBER_GOAL);
+
+  // Build the projected line for the chart using the best pace we have.
+  const primaryPace =
+    projection.pace30d.perDay && projection.pace30d.perDay > 0
+      ? projection.pace30d.perDay
+      : projection.paceLifetime.perDay && projection.paceLifetime.perDay > 0
+      ? projection.paceLifetime.perDay
+      : null;
+
+  const projLine = primaryPace
+    ? projectedLine(channel.subscribers, primaryPace, SUBSCRIBER_GOAL).map((p) => ({
+        capturedAt: p.capturedAt.toISOString(),
+        subscribers: p.subscribers,
+      }))
+    : [];
+  const histForChart = history.map((h) => ({
+    capturedAt: h.capturedAt.toISOString(),
+    subscribers: h.subscribers,
+  }));
+
   const recent = videos.slice(0, 6);
   const latestUpload = videos[0];
   const last30 = videos.filter(
@@ -51,6 +98,28 @@ export default async function DashboardOverview() {
         </div>
       </div>
 
+      {/* Goal tracker (10k projection) */}
+      <GoalTracker projection={projection} />
+
+      {/* Velocity strip (24h / 7d / 30d deltas) */}
+      <VelocityStrip deltas={deltas} />
+
+      {/* Subscriber history + projection chart */}
+      <div>
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-sm font-mono uppercase tracking-widest text-muted-foreground">
+            Subscriber trend · 90d + projection
+          </h2>
+          <Link
+            href="/dashboard/analytics"
+            className="text-sm text-primary hover:underline inline-flex items-center gap-1"
+          >
+            Detailed analytics <ArrowUpRight className="size-3.5" />
+          </Link>
+        </div>
+        <SubHistoryChart history={histForChart} projected={projLine} goal={SUBSCRIBER_GOAL} />
+      </div>
+
       {/* KPIs */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <Kpi
@@ -75,6 +144,9 @@ export default async function DashboardOverview() {
           sub={`${last30.length} upload${last30.length === 1 ? "" : "s"}`}
         />
       </div>
+
+      {/* Top performers (last 30d) */}
+      <TopPerformers videos={videos} days={30} limit={5} />
 
       {/* Latest video */}
       {latestUpload ? (
@@ -210,7 +282,7 @@ function SetupRequired({ error }: { error: string }) {
           <CardDescription className="font-mono uppercase tracking-widest text-xs text-yellow-400">
             Setup needed
           </CardDescription>
-          <CardTitle>Can't reach the YouTube API</CardTitle>
+          <CardTitle>Can&apos;t reach the YouTube API</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4 text-sm text-muted-foreground">
           <p className="text-foreground/90 font-mono text-xs bg-secondary rounded-md p-3 border border-border">

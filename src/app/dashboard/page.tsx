@@ -3,7 +3,8 @@ import { ArrowUpRight, Eye, Film, PlayCircle, Users } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
 import { fetchDmgSnapshot } from "@/lib/youtube";
-import { DMG_HANDLE, SUBSCRIBER_GOAL } from "@/lib/config";
+import { DMG_HANDLE } from "@/lib/config";
+import { getSettings } from "@/lib/settings";
 import { formatNumber, formatDuration, timeAgo } from "@/lib/utils";
 import {
   recordChannelSnapshot,
@@ -20,13 +21,17 @@ export const dynamic = "force-dynamic";
 export const revalidate = 300;
 
 export default async function DashboardOverview() {
-  const snap = await fetchDmgSnapshot(50);
+  const [snap, settings] = await Promise.all([
+    fetchDmgSnapshot(50),
+    getSettings(),
+  ]);
 
   if ("error" in snap) {
     return <SetupRequired error={snap.error} />;
   }
 
   const { channel, videos } = snap;
+  const SUBSCRIBER_GOAL = settings.subscriberGoal;
 
   // Persist a snapshot (throttled to ~1/hour) so projections have history.
   // Fire-and-forget shape: failures are swallowed inside the helper.
@@ -99,7 +104,7 @@ export default async function DashboardOverview() {
       </div>
 
       {/* Goal tracker (10k projection) */}
-      <GoalTracker projection={projection} />
+      <GoalTracker projection={projection} goalDeadline={settings.subscriberGoalDeadline} />
 
       {/* Velocity strip (24h / 7d / 30d deltas) */}
       <VelocityStrip deltas={deltas} />

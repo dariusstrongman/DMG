@@ -7,9 +7,13 @@ import {
   formatDays,
   formatEta,
 } from "@/lib/projections";
-import { SUBSCRIBER_GOAL_DEADLINE } from "@/lib/config";
-
-export function GoalTracker({ projection }: { projection: GoalProjection }) {
+export function GoalTracker({
+  projection,
+  goalDeadline,
+}: {
+  projection: GoalProjection;
+  goalDeadline?: string | null;
+}) {
   const p = projection;
 
   const trendIcon =
@@ -21,7 +25,7 @@ export function GoalTracker({ projection }: { projection: GoalProjection }) {
     p.trend === "down" ? "text-rose-400" :
     "text-muted-foreground";
 
-  const onPaceLabel = computeOnPaceLabel(p);
+  const onPaceLabel = computeOnPaceLabel(p, goalDeadline ?? null);
 
   return (
     <Card className="overflow-hidden">
@@ -115,9 +119,9 @@ function Stat({
   );
 }
 
-function computeOnPaceLabel(p: GoalProjection): string | null {
-  if (!SUBSCRIBER_GOAL_DEADLINE || !p.etaDate || p.goalReached) return null;
-  const deadline = new Date(SUBSCRIBER_GOAL_DEADLINE);
+function computeOnPaceLabel(p: GoalProjection, deadlineIso: string | null): string | null {
+  if (!deadlineIso || !p.etaDate || p.goalReached) return null;
+  const deadline = new Date(deadlineIso);
   if (isNaN(deadline.getTime())) return null;
   const slackDays = (deadline.getTime() - p.etaDate.getTime()) / (24 * 60 * 60 * 1000);
   if (slackDays >= 0) {

@@ -1,6 +1,7 @@
 import { Flame, Calendar, Clock, Image as ImageIcon, AlertTriangle, Lightbulb } from "lucide-react";
 import { timeAgo } from "@/lib/utils";
 import { CopyPickButton } from "./copy-pick-button";
+import { ProducedControls } from "./produced-controls";
 
 type Pick = {
   id: string;
@@ -16,6 +17,8 @@ type Pick = {
   tags: string[];
   modelUsed: string | null;
   createdAt: Date | string;
+  producedYtVideoId?: string | null;
+  producedAt?: Date | string | null;
 };
 
 export function ViralPickCard({ pick, rank }: { pick: Pick | null; rank?: number }) {
@@ -127,11 +130,18 @@ export function ViralPickCard({ pick, rank }: { pick: Pick | null; rank?: number
         ) : null}
       </div>
 
-      <div className="border-t border-primary/20 bg-background/30 px-5 py-3 flex items-center gap-2 flex-wrap">
-        <CopyPickButton pick={pick} />
-        {pick.modelUsed ? (
-          <span className="text-[10px] font-mono text-muted-foreground/60 ml-auto">{pick.modelUsed}</span>
-        ) : null}
+      <div className="border-t border-primary/20 bg-background/30 px-5 py-3 space-y-2">
+        <ProducedControls
+          pickId={pick.id}
+          producedYtVideoId={pick.producedYtVideoId ?? null}
+          producedAt={pick.producedAt ?? null}
+        />
+        <div className="flex items-center gap-2 flex-wrap">
+          <CopyPickButton pick={pick} />
+          {pick.modelUsed ? (
+            <span className="text-[10px] font-mono text-muted-foreground/60 ml-auto">{pick.modelUsed}</span>
+          ) : null}
+        </div>
       </div>
     </div>
   );

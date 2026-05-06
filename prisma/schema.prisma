@@ -69,6 +69,10 @@ model ViralPick {
   tags             String[]   @default([])
   signalUsed       Json?      // snapshot of the analytics inputs at gen time
   modelUsed        String?
+  // Set when the user actually produces this pitch as a video. Lets us
+  // compare "what the model predicted" vs "how the video performed."
+  producedYtVideoId String?
+  producedAt       DateTime?
   createdAt        DateTime   @default(now())
 
   channel Channel @relation(fields: [channelId], references: [id], onDelete: Cascade)
@@ -246,6 +250,19 @@ model VideoIdea {
 
   @@index([channelId, status, createdAt])
   @@map("dmg_video_ideas")
+}
+
+// ─────────── SETTINGS (runtime config, single-tenant) ───────────
+
+// Simple key-value table for settings the user wants to change without
+// editing code: subscriber goal, channel timezone, goal deadline.
+// Defaults live in src/lib/config.ts; rows here override them.
+model Setting {
+  key       String   @id
+  value     Json
+  updatedAt DateTime @updatedAt
+
+  @@map("dmg_settings")
 }
 
 // ─────────── ALERTS / AUTOMATIONS ───────────

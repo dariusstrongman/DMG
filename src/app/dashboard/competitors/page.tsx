@@ -2,25 +2,56 @@ import { Users } from "lucide-react";
 import {
   listCompetitorsWithLatest,
   refreshCompetitorSnapshots,
+  getCompetitorHistory,
 } from "@/lib/competitors";
 import { fetchDmgSnapshot } from "@/lib/youtube";
+import { getSubscriberHistory } from "@/lib/snapshots";
 import { AddCompetitorForm } from "@/components/dashboard/competitors/add-competitor-form";
 import { CompetitorRow } from "@/components/dashboard/competitors/competitor-row";
+import {
+  CompetitorComparisonChart,
+  CHART_COLORS,
+} from "@/components/dashboard/competitors/comparison-chart";
 
 export const metadata = { title: "Competitors" };
 export const dynamic = "force-dynamic";
 
 export default async function CompetitorsPage() {
-  // Refresh stats up to once per hour, then load.
   await refreshCompetitorSnapshots();
   const [rows, snap] = await Promise.all([
     listCompetitorsWithLatest(),
     fetchDmgSnapshot(1),
   ]);
   const channelSubs = "error" in snap ? 0 : snap.channel.subscribers;
+  const channelTitle = "error" in snap ? "You" : snap.channel.title;
+  const channelId = "error" in snap ? null : snap.channel.id;
+
+  // Build comparison series: your channel + each competitor.
+  const yourHistory = channelId ? await getSubscriberHistory(channelId, 90) : [];
+  const competitorSeries = await Promise.all(
+    rows.map(async (r, i) => ({
+      name: r.title,
+      color: CHART_COLORS[(i + 1) % CHART_COLORS.length], // skip 0 (reserved for "you")
+      points: (await getCompetitorHistory(r.id, 90)).map((p) => ({
+        capturedAt: p.capturedAt.toISOString(),
+        subscribers: p.subscribers,
+      })),
+    }))
+  );
+  const series = [
+    {
+      name: channelTitle,
+      color: CHART_COLORS[0],
+      points: yourHistory.map((p) => ({
+        capturedAt: p.capturedAt.toISOString(),
+        subscribers: p.subscribers,
+      })),
+    },
+    ...competitorSeries,
+  ];
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6 animate-rise">
+    <div className="max-w-5xl mx-auto space-y-6 animate-rise">
       <div className="flex items-start gap-4 flex-wrap">
         <div className="flex-1 min-w-[260px]">
           <p className="text-xs font-mono uppercase tracking-widest text-muted-foreground mb-1 flex items-center gap-2">
@@ -42,11 +73,23 @@ export default async function CompetitorsPage() {
           </p>
         </div>
       ) : (
-        <div className="space-y-3">
-          {rows.map((row) => (
-            <CompetitorRow key={row.id} row={row} channelSubs={channelSubs} />
-          ))}
-        </div>
+        <>
+          <div className="space-y-3">
+            {rows.map((row) => (
+              <CompetitorRow key={row.id} row={row} channelSubs={channelSubs} />
+            ))}
+          </div>
+
+          <div>
+            <h2 className="text-sm font-mono uppercase tracking-widest text-muted-foreground mb-3">
+              Subscriber growth · 90d
+            </h2>
+            <CompetitorComparisonChart series={series} />
+            <p className="text-[11px] text-muted-foreground/70 mt-2 font-mono">
+              Lines fill in over the next few days as snapshots accumulate. New competitors start at the moment they&apos;re added.
+            </p>
+          </div>
+        </>
       )}
     </div>
   );

@@ -8,7 +8,8 @@
 import { db } from "./db";
 import { fetchDmgSnapshot } from "./youtube";
 import { chatJson } from "./openai";
-import { CHANNEL_TIMEZONE, DMG_BRAND, DMG_HANDLE } from "./config";
+import { DMG_BRAND, DMG_HANDLE } from "./config";
+import { getSettings } from "./settings";
 import {
   postingTimeAnalysis,
   formatPerformance,
@@ -55,7 +56,9 @@ export async function generateWeeklyViralPicks(count: number = PICKS_PER_WEEK) {
     update: {},
   });
 
-  const posting = postingTimeAnalysis(videos, CHANNEL_TIMEZONE);
+  const settings = await getSettings();
+  const channelTz = settings.channelTimezone;
+  const posting = postingTimeAnalysis(videos, channelTz);
   const fmt = formatPerformance(videos);
   const sig = titleSignals(videos);
   const lenBuckets = titleLengthAnalysis(videos);
@@ -97,7 +100,7 @@ export async function generateWeeklyViralPicks(count: number = PICKS_PER_WEEK) {
     `Channel: ${channel.title} (${channel.handle})`,
     channel.description ? `Identity: ${channel.description.slice(0, 400)}` : "",
     `Subs: ${channel.subscribers.toLocaleString()} · Total videos: ${channel.totalVideos.toLocaleString()} · Total views: ${channel.totalViews.toLocaleString()}`,
-    `Local timezone: ${CHANNEL_TIMEZONE}`,
+    `Local timezone: ${channelTz}`,
     "",
     "TOP 10 ALL-TIME (recent 50):",
     top10.map(fmtVid).join("\n"),

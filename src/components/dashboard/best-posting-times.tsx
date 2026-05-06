@@ -8,7 +8,6 @@ import {
   type Slot,
 } from "@/lib/analytics-aggregates";
 import type { VideoStats } from "@/lib/youtube";
-import { CHANNEL_TIMEZONE } from "@/lib/config";
 
 const TZ_LABEL = (tz: string) => {
   // "America/Chicago" → "Chicago"
@@ -16,8 +15,14 @@ const TZ_LABEL = (tz: string) => {
   return parts[parts.length - 1].replace(/_/g, " ");
 };
 
-export function BestPostingTimes({ videos }: { videos: VideoStats[] }) {
-  const a = postingTimeAnalysis(videos, CHANNEL_TIMEZONE);
+export function BestPostingTimes({
+  videos,
+  timezone,
+}: {
+  videos: VideoStats[];
+  timezone: string;
+}) {
+  const a = postingTimeAnalysis(videos, timezone);
 
   if (a.topSlots.length === 0) {
     return (

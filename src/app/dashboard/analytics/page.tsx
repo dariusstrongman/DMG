@@ -12,7 +12,7 @@ import { EngagementTrendChart } from "@/components/dashboard/analytics/engagemen
 import { SubHistoryChart } from "@/components/dashboard/sub-history-chart";
 import { getSubscriberHistory } from "@/lib/snapshots";
 import { project, projectedLine } from "@/lib/projections";
-import { SUBSCRIBER_GOAL } from "@/lib/config";
+import { getSettings } from "@/lib/settings";
 import { engagementTrend } from "@/lib/analytics-aggregates";
 
 export const metadata = { title: "Analytics" };
@@ -41,6 +41,8 @@ export default async function AnalyticsPage() {
   }
 
   const { channel, videos } = snap;
+  const settings = await getSettings();
+  const SUBSCRIBER_GOAL = settings.subscriberGoal;
 
   // Subscriber history.
   const history = await getSubscriberHistory(channel.id, 90);
@@ -109,7 +111,7 @@ export default async function AnalyticsPage() {
       {/* Section 2: What works */}
       <Section title="What works" subtitle="Patterns across your uploads. The data tells you where to lean.">
         <div className="space-y-4">
-          <BestPostingTimes videos={videos} />
+          <BestPostingTimes videos={videos} timezone={settings.channelTimezone} />
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             <FormatComparison videos={videos} />
             <PerformanceBuckets videos={videos} />

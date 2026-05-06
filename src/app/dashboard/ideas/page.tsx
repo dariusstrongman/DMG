@@ -1,9 +1,11 @@
 import Link from "next/link";
 import { Lightbulb } from "lucide-react";
 import { listIdeas, countIdeasByStatus } from "@/lib/ideas";
+import { db } from "@/lib/db";
 import { IdeaCard } from "@/components/dashboard/ideas/idea-card";
 import { GenerateButton } from "@/components/dashboard/ideas/generate-button";
 import { ManualIdeaForm } from "@/components/dashboard/ideas/manual-idea-form";
+import { ScoreUnscoredButton } from "@/components/dashboard/ideas/score-unscored-button";
 
 export const dynamic = "force-dynamic";
 
@@ -29,9 +31,10 @@ export default async function IdeasPage({
   const sp = await searchParams;
   const status: Status = isStatus(sp.status) ? sp.status : "pending";
 
-  const [ideas, counts] = await Promise.all([
+  const [ideas, counts, unscored] = await Promise.all([
     listIdeas({ status: status === "all" ? "all" : status }),
     countIdeasByStatus(),
+    db.videoIdea.count({ where: { aiScore: null } }).catch(() => 0),
   ]);
   const total = counts.pending + counts.accepted + counts.produced + counts.rejected;
 
@@ -52,6 +55,8 @@ export default async function IdeasPage({
           <ManualIdeaForm />
         </div>
       </div>
+
+      <ScoreUnscoredButton count={unscored} />
 
       {/* Status tabs */}
       <div className="flex flex-wrap gap-1 border-b border-border">

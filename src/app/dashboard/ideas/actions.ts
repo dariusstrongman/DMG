@@ -39,6 +39,39 @@ export async function setStatusAction(
   }
 }
 
+// Score every idea that doesn't yet have an aiScore. One-time
+// cleanup for ideas created before the scoring field existed; also
+// useful if a generation skipped scoring for some reason.
+export async function scoreUnscoredIdeasAction() {
+  try {
+    const targets = await db.videoIdea.findMany({
+      where: { aiScore: null },
+      select: { id: true, title: true, hook: true, outline: true, format: true },
+      take: 50,
+    });
+    let scored = 0;
+    for (const t of targets) {
+      const res = await scoreIdeaForChannel({
+        title: t.title,
+        hook: t.hook ?? undefined,
+        outline: t.outline ?? undefined,
+        format: t.format,
+      });
+      if (res) {
+        await db.videoIdea.update({
+          where: { id: t.id },
+          data: { aiScore: res.score, modelUsed: res.modelUsed },
+        });
+        scored++;
+      }
+    }
+    revalidatePath("/dashboard/ideas");
+    return { ok: true as const, scored, total: targets.length };
+  } catch (e) {
+    return { ok: false as const, error: e instanceof Error ? e.message : "Unknown error" };
+  }
+}
+
 export async function deleteIdeaAction(id: string) {
   try {
     await deleteIdea(id);

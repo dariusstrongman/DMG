@@ -9,7 +9,8 @@ import {
   Users,
   Bell,
   Settings,
-  TrendingUp
+  TrendingUp,
+  Lightbulb
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -23,8 +24,9 @@ type Item = {
 const PRIMARY: Item[] = [
   { href: "/dashboard", label: "Overview", icon: LayoutDashboard },
   { href: "/dashboard/videos", label: "Videos", icon: Video },
+  { href: "/dashboard/ideas", label: "Ideas", icon: Lightbulb, badge: "AI" },
   { href: "/dashboard/analytics", label: "Analytics", icon: TrendingUp },
-  { href: "/dashboard/ai", label: "AI Insights", icon: Sparkles, badge: "New" },
+  { href: "/dashboard/ai", label: "AI Insights", icon: Sparkles },
   { href: "/dashboard/competitors", label: "Competitors", icon: Users },
   { href: "/dashboard/automations", label: "Automations", icon: Bell }
 ];

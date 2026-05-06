@@ -40,6 +40,7 @@ model Channel {
   snapshots ChannelSnapshot[]
   reports   AiReport[]
   alerts    Alert[]
+  ideas     VideoIdea[]
 
   @@map("dmg_channels")
 }
@@ -160,6 +161,43 @@ model AiReport {
 
   @@index([channelId, period, startsAt])
   @@map("dmg_ai_reports")
+}
+
+// ─────────── VIDEO IDEAS (AI-generated, channel-style-aware) ───────────
+
+enum IdeaStatus {
+  pending
+  accepted
+  rejected
+  produced
+}
+
+enum IdeaFormat {
+  long
+  short
+  either
+}
+
+model VideoIdea {
+  id        String     @id @default(cuid())
+  channelId String
+  title     String
+  hook      String     @db.Text
+  outline   String?    @db.Text
+  rationale String?    @db.Text
+  format    IdeaFormat @default(either)
+  tags      String[]   @default([])
+  status    IdeaStatus @default(pending)
+  source    String     @default("ai") // "ai" | "manual"
+  modelUsed String?
+  ytVideoId String?
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  channel Channel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+
+  @@index([channelId, status, createdAt])
+  @@map("dmg_video_ideas")
 }
 
 // ─────────── ALERTS / AUTOMATIONS ───────────

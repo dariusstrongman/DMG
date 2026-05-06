@@ -1,41 +1,23 @@
-import { createClient } from "@/lib/supabase/server";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Sparkles, Plus, Youtube, ArrowRight } from "lucide-react";
 import Link from "next/link";
 
-export default async function DashboardOverview() {
-  const supabase = await createClient();
-  const {
-    data: { user }
-  } = await supabase.auth.getUser();
-
-  const meta = (user?.user_metadata || {}) as {
-    full_name?: string;
-    name?: string;
-  };
-  const firstName = (meta.full_name || meta.name || user?.email || "")
-    .split(/[\s@]/)[0];
-
-  // Pass 1: no channels connected yet — show the empty state.
-  // Pass 2 will replace this with real KPI cards + charts driven by
-  // dmg_channel_snapshots and dmg_video_snapshots.
-
+export default function DashboardOverview() {
   return (
     <div className="max-w-6xl mx-auto space-y-8 animate-rise">
       <div>
         <p className="text-xs font-mono uppercase tracking-widest text-muted-foreground mb-2">
-          Welcome back
+          DMG Analytics
         </p>
         <h1 className="text-3xl font-semibold tracking-tight">
-          {firstName ? `Hey, ${firstName}.` : "Hey there."}
+          Channel dashboard.
         </h1>
         <p className="text-muted-foreground mt-1">
-          Connect a channel to see real-time analytics and AI insights.
+          Connect the DMG channel to see real-time analytics and AI insights.
         </p>
       </div>
 
-      {/* Connect channel card */}
       <Card className="overflow-hidden">
         <div className="relative">
           <div
@@ -47,10 +29,10 @@ export default async function DashboardOverview() {
               <Youtube className="size-7 text-primary" />
             </div>
             <div className="flex-1">
-              <h2 className="text-xl font-semibold">Connect your YouTube channel</h2>
+              <h2 className="text-xl font-semibold">Connect the DMG YouTube channel</h2>
               <p className="text-muted-foreground mt-1 max-w-xl">
-                Authorize once. We'll pull your channel info, recent videos,
-                and start tracking analytics. Only the scopes we need.
+                Authorize once. We'll pull channel info, recent videos, and start
+                tracking analytics. Only the scopes we need.
               </p>
             </div>
             <Button size="lg" disabled title="OAuth flow ships in Pass 2">
@@ -61,7 +43,6 @@ export default async function DashboardOverview() {
         </div>
       </Card>
 
-      {/* What's in Pass 2 */}
       <div>
         <h2 className="text-sm font-mono uppercase tracking-widest text-muted-foreground mb-4">
           Coming in Pass 2
@@ -95,7 +76,6 @@ export default async function DashboardOverview() {
         </div>
       </div>
 
-      {/* Footer hint */}
       <Card>
         <CardHeader>
           <CardTitle className="text-base">Set up checklist</CardTitle>
@@ -104,9 +84,9 @@ export default async function DashboardOverview() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3 text-sm">
-          <Item done text="Sign in with Google (you just did)" />
+          <Item done text="Password gate live (you're past it)" />
           <Item text="Add YouTube Data API v3 key to .env.local (YOUTUBE_API_KEY)" />
-          <Item text="Configure YouTube OAuth in Google Cloud Console + add scopes to Supabase Auth" />
+          <Item text="Configure Google OAuth client for YouTube (Pass 2 scope flow)" />
           <Item text="Run database migration (npm run db:push)" />
           <Item text="Deploy to Vercel + point dmg.stromation.com at it" />
           <div className="pt-2">

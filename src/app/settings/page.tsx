@@ -1,5 +1,3 @@
-import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
 import { Sidebar } from "@/components/dashboard/sidebar";
 import { Topbar } from "@/components/dashboard/topbar";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -7,55 +5,35 @@ import { Button } from "@/components/ui/button";
 
 export const metadata = { title: "Settings" };
 
-export default async function SettingsPage() {
-  const supabase = await createClient();
-  const {
-    data: { user }
-  } = await supabase.auth.getUser();
-
-  if (!user) redirect("/login?next=/settings");
-
-  const meta = (user.user_metadata || {}) as {
-    full_name?: string;
-    name?: string;
-    avatar_url?: string;
-    picture?: string;
-  };
-
+export default function SettingsPage() {
   return (
     <div className="min-h-screen flex">
       <Sidebar />
       <div className="flex-1 flex flex-col min-w-0">
-        <Topbar
-          user={{
-            email: user.email,
-            displayName: meta.full_name || meta.name || user.email,
-            avatarUrl: meta.avatar_url || meta.picture || null
-          }}
-        />
+        <Topbar />
         <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-x-hidden">
           <div className="max-w-3xl mx-auto space-y-6 animate-rise">
             <div>
               <h1 className="text-3xl font-semibold tracking-tight">Settings</h1>
-              <p className="text-muted-foreground mt-1">Profile, channels, billing, notifications.</p>
+              <p className="text-muted-foreground mt-1">Connected channels and notifications.</p>
             </div>
 
             <Card>
               <CardHeader>
-                <CardTitle>Profile</CardTitle>
-                <CardDescription>Loaded from your Google account.</CardDescription>
+                <CardTitle>Access</CardTitle>
+                <CardDescription>
+                  This dashboard is shared by password. Anyone with the password can view stats.
+                </CardDescription>
               </CardHeader>
-              <CardContent className="space-y-3 text-sm">
-                <Row label="Email" value={user.email || "—"} />
-                <Row label="Name" value={meta.full_name || meta.name || "—"} />
-                <Row label="User ID" value={user.id} mono />
+              <CardContent className="space-y-3 text-sm text-muted-foreground">
+                <p>To rotate the password, update <code className="text-foreground font-mono">DMG_PASSWORD</code> in Vercel env vars and redeploy. All existing sessions will continue to work until they expire (30 days). To force everyone out, also rotate <code className="text-foreground font-mono">DMG_AUTH_SECRET</code>.</p>
               </CardContent>
             </Card>
 
             <Card>
               <CardHeader>
                 <CardTitle>Connected channels</CardTitle>
-                <CardDescription>None yet. Connect from the dashboard.</CardDescription>
+                <CardDescription>None yet. Connect from the dashboard (Pass 2).</CardDescription>
               </CardHeader>
             </Card>
 
@@ -68,8 +46,8 @@ export default async function SettingsPage() {
 
             <Card>
               <CardHeader>
-                <CardTitle className="text-destructive">Danger zone</CardTitle>
-                <CardDescription>Sign out of this session.</CardDescription>
+                <CardTitle>Sign out</CardTitle>
+                <CardDescription>Clears your session cookie on this device.</CardDescription>
               </CardHeader>
               <CardContent>
                 <form action="/auth/signout" method="POST">
@@ -80,15 +58,6 @@ export default async function SettingsPage() {
           </div>
         </main>
       </div>
-    </div>
-  );
-}
-
-function Row({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
-  return (
-    <div className="flex items-center justify-between gap-4 py-2 border-b border-border/40 last:border-0">
-      <span className="text-muted-foreground">{label}</span>
-      <span className={mono ? "font-mono text-xs" : ""}>{value}</span>
     </div>
   );
 }

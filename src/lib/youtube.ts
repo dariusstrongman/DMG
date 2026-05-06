@@ -10,7 +10,10 @@
 import { DMG_HANDLE } from "./config";
 
 const YT_API = "https://www.googleapis.com/youtube/v3";
-const REVALIDATE_SECONDS = 300; // 5 min
+// 1 min cache. YT Data API itself lags real-time view counts by
+// 5-30 min anyway (Studio uses a different API), so caching shorter
+// than this just burns quota without making numbers fresher.
+const REVALIDATE_SECONDS = 60;
 
 export class YouTubeError extends Error {
   constructor(message: string, public readonly status?: number) {

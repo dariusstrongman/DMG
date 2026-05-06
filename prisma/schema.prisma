@@ -44,8 +44,37 @@ model Channel {
   reports   AiReport[]
   alerts    Alert[]
   ideas     VideoIdea[]
+  viralPicks ViralPick[]
 
   @@map("dmg_channels")
+}
+
+// AI-synthesized "if you do this exactly, it'll probably go viral" pitch.
+// Pulls signal from the entire analytics surface (top performers, best
+// posting slots, title patterns, format mix) into ONE concrete pitch.
+// Most-recent row per channel is the active pick; older rows are kept
+// for history so we can compare predictions to outcomes later.
+model ViralPick {
+  id               String     @id @default(cuid())
+  channelId        String
+  title            String
+  format           IdeaFormat @default(either)
+  postDay          String?    // e.g. "Tuesday"
+  postTime         String?    // e.g. "2pm-4pm" (channel-local)
+  hook             String     @db.Text
+  outline          String     @db.Text
+  thumbnailConcept String?    @db.Text
+  viralThesis      String?    @db.Text
+  riskNote         String?    @db.Text
+  tags             String[]   @default([])
+  signalUsed       Json?      // snapshot of the analytics inputs at gen time
+  modelUsed        String?
+  createdAt        DateTime   @default(now())
+
+  channel Channel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+
+  @@index([channelId, createdAt])
+  @@map("dmg_viral_picks")
 }
 
 // Daily snapshot of a channel's aggregate stats — drives time-series charts.

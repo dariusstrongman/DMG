@@ -1,0 +1,270 @@
+// Prisma schema for DMG Analytics.
+// Pooled DATABASE_URL is used at runtime; DIRECT_URL is used for migrations.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// ─────────── USERS / TEAMS / WORKSPACES ───────────
+
+// Profiles mirror auth.users (Supabase) by primary key.
+// Created via DB trigger when a new auth user signs up.
+model Profile {
+  id          String   @id @db.Uuid
+  email       String   @unique
+  displayName String?
+  avatarUrl   String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  ownedTeams      Team[]           @relation("TeamOwner")
+  memberships     TeamMember[]
+  channels        Channel[]
+  alerts          Alert[]
+  reportsAuthored AiReport[]
+
+  @@map("dmg_profiles")
+}
+
+model Team {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  ownerId   String   @db.Uuid
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  owner    Profile      @relation("TeamOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  members  TeamMember[]
+  channels Channel[]
+  alerts   Alert[]
+
+  @@index([ownerId])
+  @@map("dmg_teams")
+}
+
+enum TeamRole {
+  owner
+  admin
+  editor
+  viewer
+}
+
+model TeamMember {
+  id        String   @id @default(cuid())
+  teamId    String
+  profileId String   @db.Uuid
+  role      TeamRole @default(viewer)
+  createdAt DateTime @default(now())
+
+  team    Team    @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  profile Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  @@unique([teamId, profileId])
+  @@index([profileId])
+  @@map("dmg_team_members")
+}
+
+// ─────────── YOUTUBE CHANNELS ───────────
+
+model Channel {
+  id              String   @id @default(cuid())
+  // YouTube channel id (UC...)
+  ytChannelId     String   @unique
+  ownerProfileId  String   @db.Uuid
+  teamId          String?
+  // Encrypted refresh token from Google OAuth.
+  refreshToken    String?
+  scopes          String[] @default([])
+  title           String
+  handle          String?
+  description     String?  @db.Text
+  thumbnailUrl    String?
+  country         String?
+  publishedAt     DateTime?
+  // Last successful sync.
+  lastSyncedAt    DateTime?
+  syncIntervalMin Int      @default(60)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  owner    Profile             @relation(fields: [ownerProfileId], references: [id], onDelete: Cascade)
+  team     Team?               @relation(fields: [teamId], references: [id], onDelete: SetNull)
+  videos   Video[]
+  snapshots ChannelSnapshot[]
+  reports  AiReport[]
+  alerts   Alert[]
+
+  @@index([ownerProfileId])
+  @@index([teamId])
+  @@map("dmg_channels")
+}
+
+// Daily snapshot of a channel's aggregate stats — used for time-series charts.
+model ChannelSnapshot {
+  id              String   @id @default(cuid())
+  channelId       String
+  capturedAt      DateTime @default(now())
+  subscribers     BigInt
+  totalViews      BigInt
+  totalVideos     Int
+  estimatedMinutesWatched BigInt?
+  estimatedRevenue Decimal? @db.Decimal(10, 2)
+  averageViewDuration Int? // seconds
+  ctr             Decimal? @db.Decimal(5, 4)
+
+  channel Channel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+
+  @@index([channelId, capturedAt])
+  @@map("dmg_channel_snapshots")
+}
+
+// ─────────── VIDEOS ───────────
+
+enum VideoFormat {
+  long
+  short
+  live
+}
+
+model Video {
+  id           String      @id @default(cuid())
+  channelId    String
+  ytVideoId    String      @unique
+  title        String
+  description  String?     @db.Text
+  thumbnailUrl String?
+  publishedAt  DateTime
+  durationSec  Int
+  format       VideoFormat @default(long)
+  tags         String[]    @default([])
+  // Latest metrics (refreshed on sync).
+  views        BigInt      @default(0)
+  likes        BigInt      @default(0)
+  comments     BigInt      @default(0)
+  // AI-derived scores (0-100), null until scored.
+  viralityScore   Int?
+  hookScore       Int?
+  retentionRisk   Int?
+  seoScore        Int?
+  aiSummary       String?  @db.Text
+  // Cached transcript (when available).
+  transcript      String?  @db.Text
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  channel   Channel         @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  snapshots VideoSnapshot[]
+
+  @@index([channelId, publishedAt])
+  @@index([viralityScore])
+  @@map("dmg_videos")
+}
+
+model VideoSnapshot {
+  id                  String   @id @default(cuid())
+  videoId             String
+  capturedAt          DateTime @default(now())
+  views               BigInt
+  likes               BigInt
+  comments            BigInt
+  averageViewDuration Int?     // seconds
+  averageViewPercentage Decimal? @db.Decimal(5, 2)
+  ctr                 Decimal? @db.Decimal(5, 4)
+  estimatedRevenue    Decimal? @db.Decimal(10, 2)
+
+  video Video @relation(fields: [videoId], references: [id], onDelete: Cascade)
+
+  @@index([videoId, capturedAt])
+  @@map("dmg_video_snapshots")
+}
+
+// ─────────── COMPETITORS ───────────
+
+model Competitor {
+  id           String   @id @default(cuid())
+  ytChannelId  String
+  trackedById  String   @db.Uuid
+  title        String
+  handle       String?
+  thumbnailUrl String?
+  notes        String?  @db.Text
+  createdAt    DateTime @default(now())
+
+  @@unique([trackedById, ytChannelId])
+  @@index([trackedById])
+  @@map("dmg_competitors")
+}
+
+// ─────────── AI REPORTS ───────────
+
+enum ReportPeriod {
+  daily
+  weekly
+  monthly
+}
+
+model AiReport {
+  id        String       @id @default(cuid())
+  channelId String
+  authorId  String       @db.Uuid
+  period    ReportPeriod
+  startsAt  DateTime
+  endsAt    DateTime
+  summary   String       @db.Text
+  details   Json
+  modelUsed String       @default("gpt-4o-mini")
+  createdAt DateTime     @default(now())
+
+  channel Channel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  author  Profile @relation(fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@index([channelId, period, startsAt])
+  @@map("dmg_ai_reports")
+}
+
+// ─────────── ALERTS / AUTOMATIONS ───────────
+
+enum AlertChannel {
+  email
+  discord
+  telegram
+}
+
+enum AlertCondition {
+  viral_video_detected
+  ctr_below_threshold
+  subscriber_spike
+  view_milestone
+}
+
+model Alert {
+  id            String        @id @default(cuid())
+  ownerId       String        @db.Uuid
+  channelId     String?
+  teamId        String?
+  name          String
+  condition     AlertCondition
+  thresholdJson Json?
+  delivery      AlertChannel
+  webhookUrl    String?
+  email         String?
+  enabled       Boolean       @default(true)
+  lastFiredAt   DateTime?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  owner   Profile  @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  channel Channel? @relation(fields: [channelId], references: [id], onDelete: SetNull)
+  team    Team?    @relation(fields: [teamId], references: [id], onDelete: SetNull)
+
+  @@index([ownerId])
+  @@index([channelId])
+  @@map("dmg_alerts")
+}

@@ -1,0 +1,124 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ───────────────────── DESIGN TOKENS ───────────────────── */
+@layer base {
+  :root {
+    /* Dark-only product. Light tokens kept minimal for native form controls. */
+    --background: 230 24% 5%;
+    --foreground: 220 12% 96%;
+
+    --card: 228 18% 8%;
+    --card-foreground: 220 12% 96%;
+
+    --primary: 260 90% 66%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 228 14% 14%;
+    --secondary-foreground: 220 12% 92%;
+
+    --muted: 228 14% 12%;
+    --muted-foreground: 220 8% 62%;
+
+    --accent: 190 92% 56%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+
+    --success: 160 84% 50%;
+    --warning: 38 96% 60%;
+
+    --border: 228 14% 16%;
+    --input: 228 14% 16%;
+    --ring: 260 90% 66%;
+
+    --radius: 0.75rem;
+
+    /* Recharts palette */
+    --chart-1: 260 90% 66%;
+    --chart-2: 190 92% 56%;
+    --chart-3: 320 80% 60%;
+    --chart-4: 38 96% 60%;
+    --chart-5: 160 84% 50%;
+  }
+
+  html, body {
+    background: hsl(var(--background));
+    color: hsl(var(--foreground));
+    font-family: var(--font-sans), system-ui, -apple-system, "Segoe UI", sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  ::selection {
+    background: hsl(var(--primary) / 0.45);
+    color: hsl(var(--primary-foreground));
+  }
+
+  /* Numbers should look numeric. Tabular figures, mono optional. */
+  .tabular-nums { font-variant-numeric: tabular-nums; }
+}
+
+/* ───────────────────── BACKGROUND TEXTURE ───────────────────── */
+.bg-app {
+  background:
+    radial-gradient(1200px 600px at 80% -10%, hsl(var(--primary) / 0.18), transparent 60%),
+    radial-gradient(900px 500px at 0% 10%, hsl(var(--accent) / 0.10), transparent 55%),
+    hsl(var(--background));
+}
+.bg-grid {
+  background-image:
+    linear-gradient(to right, hsl(var(--border) / 0.4) 1px, transparent 1px),
+    linear-gradient(to bottom, hsl(var(--border) / 0.4) 1px, transparent 1px);
+  background-size: 56px 56px;
+  mask-image: radial-gradient(ellipse 80% 60% at 50% 0%, #000 30%, transparent 80%);
+}
+
+/* ───────────────────── GLASS / CARD ───────────────────── */
+.glass {
+  background: linear-gradient(180deg, hsl(var(--card) / 0.7), hsl(var(--card) / 0.5));
+  border: 1px solid hsl(var(--border) / 0.8);
+  backdrop-filter: blur(12px);
+}
+.glass-strong {
+  background: linear-gradient(180deg, hsl(var(--card) / 0.9), hsl(var(--card) / 0.7));
+  border: 1px solid hsl(var(--border));
+  backdrop-filter: blur(16px);
+}
+
+/* ───────────────────── GRADIENT TEXT / BUTTONS ───────────────────── */
+.gradient-text {
+  background: linear-gradient(120deg, hsl(var(--foreground)) 0%, hsl(var(--foreground)) 30%, hsl(var(--primary)) 60%, hsl(var(--accent)) 100%);
+  background-size: 200% 200%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: gradient-pan 12s ease infinite;
+}
+
+.btn-primary {
+  background: linear-gradient(135deg, hsl(var(--primary)), hsl(260 90% 50%));
+  box-shadow: 0 0 0 1px hsl(var(--primary) / 0.4),
+    0 8px 32px -8px hsl(var(--primary) / 0.6);
+}
+.btn-primary:hover { filter: brightness(1.08); }
+.btn-primary:active { transform: translateY(1px); }
+
+/* ───────────────────── SCROLLBAR ───────────────────── */
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: hsl(var(--border));
+  border-radius: 999px;
+  border: 2px solid hsl(var(--background));
+}
+::-webkit-scrollbar-thumb:hover { background: hsl(var(--muted-foreground) / 0.4); }
+
+/* ───────────────────── KPI SHIMMER LOADING ───────────────────── */
+.shimmer::after {
+  content: "";
+  position: absolute; inset: 0;
+  background: linear-gradient(110deg, transparent 30%, hsl(var(--foreground) / 0.06) 50%, transparent 70%);
+  animation: shimmer 2.4s linear infinite;
+}

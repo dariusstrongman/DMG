@@ -22,7 +22,8 @@ export default async function VideosPage({
 }) {
   const sp = await searchParams;
   const format: FormatFilter = isFormatFilter(sp.format) ? sp.format : "all";
-  const sort = sp.sort === "views" ? "views" : "recent";
+  const sort: "views" | "engagement" | "recent" =
+    sp.sort === "views" ? "views" : sp.sort === "engagement" ? "engagement" : "recent";
 
   const snap = await fetchDmgSnapshot(50);
   if ("error" in snap) {
@@ -52,6 +53,8 @@ export default async function VideosPage({
   const sorted =
     sort === "views"
       ? [...filtered].sort((a, b) => b.views - a.views)
+      : sort === "engagement"
+      ? [...filtered].sort((a, b) => b.engagement - a.engagement)
       : filtered;
 
   const spikes = await getVideoSpikes24h(filtered.map((v) => v.id));
@@ -106,6 +109,13 @@ export default async function VideosPage({
             className={sort === "views" ? "text-foreground underline" : "hover:text-foreground"}
           >
             Views
+          </Link>
+          <span>·</span>
+          <Link
+            href={`/dashboard/videos?format=${format}&sort=engagement`}
+            className={sort === "engagement" ? "text-foreground underline" : "hover:text-foreground"}
+          >
+            Engagement
           </Link>
         </div>
       </div>

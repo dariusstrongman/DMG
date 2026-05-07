@@ -11,6 +11,7 @@ import {
   ChevronDown,
 } from "lucide-react";
 import { setStatusAction, deleteIdeaAction } from "@/app/dashboard/ideas/actions";
+import { timeAgo } from "@/lib/utils";
 
 type IdeaRow = {
   id: string;
@@ -101,6 +102,18 @@ export function IdeaCard({ idea }: { idea: IdeaRow }) {
                   Manual
                 </span>
               ) : null}
+              <span
+                className="text-[10px] font-mono text-muted-foreground/70 ml-auto"
+                title={new Date(idea.createdAt).toLocaleString(undefined, {
+                  year: "numeric",
+                  month: "short",
+                  day: "numeric",
+                  hour: "2-digit",
+                  minute: "2-digit",
+                })}
+              >
+                added {timeAgo(idea.createdAt)}
+              </span>
             </div>
             <h3 className="font-semibold text-base leading-snug">{idea.title}</h3>
             {idea.hook ? (

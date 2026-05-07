@@ -52,7 +52,7 @@ export default async function PersonalLoginPage({
               </div>
             ) : null}
 
-            <form action="/auth/personal" method="post" className="space-y-4">
+            <form action="/api/auth/personal" method="post" className="space-y-4">
               <input type="hidden" name="next" value={next} />
               <input type="hidden" name="slug" value={slug} />
               <div>

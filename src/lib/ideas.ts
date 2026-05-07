@@ -33,7 +33,51 @@ function normalizeOutline(o: unknown): string {
 
 type GenerateResponse = { ideas: GeneratedIdea[] };
 
-function buildPrompt(channel: ChannelStats, videos: VideoStats[], count: number) {
+// Pull the user's idea-judgment history so the model can learn from it.
+// Rejected = anti-patterns. Accepted/produced = patterns to favor.
+// Bounded so the prompt stays cheap; the most-recent decisions are the
+// most informative since taste evolves.
+const FEEDBACK_LOOKBACK = 25;
+
+type FeedbackIdea = {
+  title: string;
+  hook: string;
+  format: "long" | "short" | "either";
+  tags: string[];
+  aiScore: number | null;
+};
+
+async function getIdeaFeedback(): Promise<{
+  rejected: FeedbackIdea[];
+  accepted: FeedbackIdea[];
+}> {
+  try {
+    const [rejected, accepted] = await Promise.all([
+      db.videoIdea.findMany({
+        where: { status: "rejected" },
+        orderBy: { updatedAt: "desc" },
+        take: FEEDBACK_LOOKBACK,
+        select: { title: true, hook: true, format: true, tags: true, aiScore: true },
+      }),
+      db.videoIdea.findMany({
+        where: { status: { in: ["accepted", "produced"] } },
+        orderBy: { updatedAt: "desc" },
+        take: FEEDBACK_LOOKBACK,
+        select: { title: true, hook: true, format: true, tags: true, aiScore: true },
+      }),
+    ]);
+    return { rejected, accepted };
+  } catch {
+    return { rejected: [], accepted: [] };
+  }
+}
+
+function buildPrompt(
+  channel: ChannelStats,
+  videos: VideoStats[],
+  count: number,
+  feedback: { rejected: FeedbackIdea[]; accepted: FeedbackIdea[] }
+) {
   // Pick the most recent 30 uploads, plus the top 5 by views as anchors.
   const recent = videos.slice(0, 30);
   const top = [...videos]
@@ -69,8 +113,40 @@ function buildPrompt(channel: ChannelStats, videos: VideoStats[], count: number)
     "- Pick format (long, short, or either) based on what tends to perform on this channel.",
     "- Score each idea's viral potential 1-10 (10 = unmissable banger for this channel; 1 = unlikely to land). Be honest, don't grade-inflate.",
     "",
+    "LEARNING LOOP — IMPORTANT:",
+    "- The user reviews every idea you propose and tags it ACCEPTED, PRODUCED, or REJECTED.",
+    "- Treat REJECTED ideas as anti-patterns. Do NOT propose anything semantically similar to rejected ones — same topic, same angle, same hook structure, same title formula. Adapt and try a different lane.",
+    "- Treat ACCEPTED/PRODUCED ideas as positive signal. Lean toward those topics, formats, hook styles, and title patterns. Build on what the user has shown they want.",
+    "- If a rejected idea had a high AI score, that is a calibration signal: your taste model is off for this channel. Recalibrate downward on similar ideas.",
+    "- You may propose variations that explicitly avoid a previous rejection's failure mode (e.g., \"like X but without the listicle framing they didn't like\").",
+    "",
     "Return ONLY valid JSON of shape: {\"ideas\":[{\"title\":\"\",\"hook\":\"\",\"outline\":\"\",\"rationale\":\"\",\"format\":\"long|short|either\",\"tags\":[\"\"],\"viral_score\":7}]}",
   ].join("\n");
+
+  const fmtFeedback = (it: FeedbackIdea) => {
+    const score = it.aiScore !== null ? ` · AI scored ${it.aiScore}/10` : "";
+    const tags = it.tags.length > 0 ? ` · tags: ${it.tags.slice(0, 4).join(", ")}` : "";
+    const hookSnippet = it.hook ? ` — hook: "${it.hook.slice(0, 80).replace(/"/g, '\\"')}"` : "";
+    return `- "${it.title.replace(/"/g, '\\"')}" · ${it.format}${score}${hookSnippet}${tags}`;
+  };
+
+  const rejectedSection =
+    feedback.rejected.length > 0
+      ? [
+          "",
+          `REJECTED IDEAS (${feedback.rejected.length}, most recent first) — DO NOT propose anything in the same vein:`,
+          ...feedback.rejected.map(fmtFeedback),
+        ]
+      : [];
+
+  const acceptedSection =
+    feedback.accepted.length > 0
+      ? [
+          "",
+          `ACCEPTED / PRODUCED IDEAS (${feedback.accepted.length}, most recent first) — these the user wanted; lean toward this taste:`,
+          ...feedback.accepted.map(fmtFeedback),
+        ]
+      : [];
 
   const user = [
     `Channel: ${channel.title} (${channel.handle})`,
@@ -82,8 +158,10 @@ function buildPrompt(channel: ChannelStats, videos: VideoStats[], count: number)
     "",
     "TOP PERFORMERS (all-time among the last 50):",
     ...top.map(fmt),
+    ...acceptedSection,
+    ...rejectedSection,
     "",
-    `Generate ${count} new video ideas. Rank them best-first.`,
+    `Generate ${count} new video ideas. Rank them best-first. Apply the learning loop above — avoid the rejected vein, lean into the accepted vein.`,
   ]
     .filter(Boolean)
     .join("\n");
@@ -117,7 +195,8 @@ export async function generateIdeas(count: number = DEFAULT_COUNT) {
     update: { title: channel.title, lastSyncedAt: new Date() },
   });
 
-  const { system, user } = buildPrompt(channel, videos, count);
+  const feedback = await getIdeaFeedback();
+  const { system, user } = buildPrompt(channel, videos, count, feedback);
   const { data, modelUsed } = await chatJson<GenerateResponse>({
     model: MODEL,
     system,

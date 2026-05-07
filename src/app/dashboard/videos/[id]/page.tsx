@@ -2,11 +2,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import Link from "next/link";
 import Image from "next/image";
 import { notFound } from "next/navigation";
-import { ArrowLeft, ExternalLink, TrendingUp } from "lucide-react";
+import { ArrowLeft, ExternalLink, TrendingUp, Sparkles } from "lucide-react";
 import { fetchDmgSnapshot } from "@/lib/youtube";
 import { getVideoHistory } from "@/lib/video-snapshots";
 import { formatNumber, formatDuration, timeAgo } from "@/lib/utils";
 import { VideoSnapshotChart } from "@/components/dashboard/video-snapshot-chart";
+import { projectVideo } from "@/lib/video-projections";
 
 export const dynamic = "force-dynamic";
 
@@ -24,6 +25,11 @@ export default async function VideoDetailPage({
   if (!video) notFound();
 
   const history = await getVideoHistory(id, 90);
+  const projection = projectVideo({
+    views: video.views,
+    publishedAt: video.publishedAt,
+    isShort: video.isShort,
+  });
 
   let delta24h: number | null = null;
   if (history.length >= 2) {
@@ -91,6 +97,48 @@ export default async function VideoDetailPage({
         </CardContent>
       </Card>
 
+      {projection.proj30 !== null ? (
+        <Card className="bg-primary/5 border-primary/20">
+          <CardHeader>
+            <CardTitle className="text-base flex items-center gap-2">
+              <Sparkles className="size-4 text-primary" />
+              Projected trajectory
+            </CardTitle>
+            <CardDescription>
+              Based on this video's current views ({formatNumber(projection.current)} at day {projection.ageDays.toFixed(1)}) and the typical view-decay curve for {projection.isShort ? "Shorts" : "long-form"}.
+              <span className="ml-1 font-mono uppercase tracking-widest text-[10px] text-muted-foreground">
+                · confidence: {projection.confidence}
+              </span>
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-3 gap-4">
+              <ProjStat
+                label="By day 7"
+                projected={projection.proj7}
+                ageDays={projection.ageDays}
+                milestone={7}
+                current={projection.current}
+              />
+              <ProjStat
+                label="By day 15"
+                projected={projection.proj15}
+                ageDays={projection.ageDays}
+                milestone={15}
+                current={projection.current}
+              />
+              <ProjStat
+                label="By day 30"
+                projected={projection.proj30}
+                ageDays={projection.ageDays}
+                milestone={30}
+                current={projection.current}
+              />
+            </div>
+          </CardContent>
+        </Card>
+      ) : null}
+
       <div>
         <h2 className="text-sm font-mono uppercase tracking-widest text-muted-foreground mb-3">
           Views over time
@@ -126,6 +174,38 @@ function Stat({ label, value }: { label: string; value: string }) {
     <div>
       <div className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground">{label}</div>
       <div className="text-base font-semibold tabular-nums mt-0.5">{value}</div>
+    </div>
+  );
+}
+
+function ProjStat({
+  label,
+  projected,
+  ageDays,
+  milestone,
+  current,
+}: {
+  label: string;
+  projected: number | null;
+  ageDays: number;
+  milestone: number;
+  current: number;
+}) {
+  const isPast = milestone <= ageDays;
+  return (
+    <div>
+      <div className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground">
+        {label}
+        {isPast ? <span className="ml-1 text-foreground/60">(actual)</span> : null}
+      </div>
+      <div className="text-2xl font-semibold tabular-nums mt-0.5">
+        {projected === null ? "—" : formatNumber(projected)}
+      </div>
+      {!isPast && projected !== null ? (
+        <div className="text-[11px] text-muted-foreground mt-0.5">
+          +{formatNumber(projected - current)} from now
+        </div>
+      ) : null}
     </div>
   );
 }

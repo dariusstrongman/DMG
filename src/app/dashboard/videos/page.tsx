@@ -5,6 +5,7 @@ import { fetchDmgSnapshot } from "@/lib/youtube";
 import { formatNumber, formatDuration, timeAgo } from "@/lib/utils";
 import { ExternalLink, TrendingUp } from "lucide-react";
 import { getVideoSpikes24h } from "@/lib/video-snapshots";
+import { projectVideo } from "@/lib/video-projections";
 
 export const metadata = { title: "Videos" };
 export const dynamic = "force-dynamic";
@@ -132,6 +133,7 @@ export default async function VideosPage({
                 <th className="text-right px-4 py-3 font-medium">24h</th>
                 <th className="text-right px-4 py-3 font-medium">Likes</th>
                 <th className="text-right px-4 py-3 font-medium">Engagement</th>
+                <th className="text-right px-4 py-3 font-medium" title="Projected views by day 30, based on view-decay curve. Long-form τ=14d, Shorts τ=5d.">Proj 30d</th>
                 <th className="px-2 py-3"></th>
               </tr>
             </thead>
@@ -169,6 +171,23 @@ export default async function VideosPage({
                     </td>
                     <td className="px-4 py-3 text-right tabular-nums">{formatNumber(v.likes)}</td>
                     <td className="px-4 py-3 text-right tabular-nums">{v.engagement.toFixed(2)}%</td>
+                    <td className="px-4 py-3 text-right tabular-nums">
+                      {(() => {
+                        const p = projectVideo({ views: v.views, publishedAt: v.publishedAt, isShort: v.isShort });
+                        if (p.proj30 === null) {
+                          return <span className="text-muted-foreground/50">—</span>;
+                        }
+                        const lift = p.proj30 - v.views;
+                        return (
+                          <span
+                            className={p.confidence === "low" ? "text-muted-foreground" : "text-foreground"}
+                            title={`Projected day-30 views. +${formatNumber(lift)} expected from now (confidence: ${p.confidence}).`}
+                          >
+                            {formatNumber(p.proj30)}
+                          </span>
+                        );
+                      })()}
+                    </td>
                     <td className="px-2 py-3">
                       <Link
                         href={`https://youtube.com/watch?v=${v.id}`}

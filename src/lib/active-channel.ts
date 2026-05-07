@@ -34,9 +34,10 @@ export async function getActiveChannelHandle(): Promise<string> {
   return (await getActiveChannel()).handle;
 }
 
+// Returns every channel. Personal ones are still listed for users
+// without a personal session — clicking one bounces them to the
+// personal-login form. We don't hide them, otherwise the switcher
+// disappears and the user has no way to log in.
 export async function listAvailableChannels(): Promise<ChannelConfig[]> {
-  const jar = await cookies();
-  const tok = jar.get(PERSONAL_SESSION_COOKIE)?.value ?? null;
-  const personalOk = await verifyPersonalSessionToken(tok);
-  return CHANNELS.filter((c) => !c.personal || personalOk);
+  return CHANNELS;
 }

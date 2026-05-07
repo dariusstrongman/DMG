@@ -298,21 +298,39 @@ export async function scoreIdeaForChannel(idea: {
 
 export type IdeaListFilters = {
   status?: "pending" | "accepted" | "rejected" | "produced" | "all";
+  page?: number;
+  perPage?: number;
 };
 
-export async function listIdeas(filters: IdeaListFilters = {}) {
+export type IdeaListResult = {
+  items: Awaited<ReturnType<typeof db.videoIdea.findMany>>;
+  total: number;
+  page: number;
+  perPage: number;
+  totalPages: number;
+};
+
+export async function listIdeas(filters: IdeaListFilters = {}): Promise<IdeaListResult> {
+  const perPage = Math.max(1, Math.min(100, filters.perPage ?? 10));
+  const page = Math.max(1, filters.page ?? 1);
   try {
     const where: Record<string, unknown> = {};
     if (filters.status && filters.status !== "all") {
       where.status = filters.status;
     }
-    return await db.videoIdea.findMany({
-      where,
-      orderBy: [{ status: "asc" }, { createdAt: "desc" }],
-      take: 100,
-    });
+    const [items, total] = await Promise.all([
+      db.videoIdea.findMany({
+        where,
+        orderBy: [{ status: "asc" }, { createdAt: "desc" }],
+        skip: (page - 1) * perPage,
+        take: perPage,
+      }),
+      db.videoIdea.count({ where }),
+    ]);
+    const totalPages = Math.max(1, Math.ceil(total / perPage));
+    return { items, total, page: Math.min(page, totalPages), perPage, totalPages };
   } catch {
-    return [];
+    return { items: [], total: 0, page: 1, perPage, totalPages: 1 };
   }
 }
 

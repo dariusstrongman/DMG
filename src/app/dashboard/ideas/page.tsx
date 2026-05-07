@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Lightbulb } from "lucide-react";
+import { ChevronLeft, ChevronRight, Lightbulb } from "lucide-react";
 import { listIdeas, countIdeasByStatus } from "@/lib/ideas";
 import { db } from "@/lib/db";
 import { IdeaCard } from "@/components/dashboard/ideas/idea-card";
@@ -23,19 +23,28 @@ function isStatus(s: string | undefined): s is Status {
   return s === "all" || s === "pending" || s === "accepted" || s === "produced" || s === "rejected";
 }
 
+const PER_PAGE = 10;
+
 export default async function IdeasPage({
   searchParams,
 }: {
-  searchParams: Promise<{ status?: string }>;
+  searchParams: Promise<{ status?: string; page?: string }>;
 }) {
   const sp = await searchParams;
   const status: Status = isStatus(sp.status) ? sp.status : "pending";
+  const pageParam = Number.parseInt(sp.page ?? "1", 10);
+  const requestedPage = Number.isFinite(pageParam) && pageParam > 0 ? pageParam : 1;
 
-  const [ideas, counts, unscored] = await Promise.all([
-    listIdeas({ status: status === "all" ? "all" : status }),
+  const [list, counts, unscored] = await Promise.all([
+    listIdeas({
+      status: status === "all" ? "all" : status,
+      page: requestedPage,
+      perPage: PER_PAGE,
+    }),
     countIdeasByStatus(),
     db.videoIdea.count({ where: { aiScore: null } }).catch(() => 0),
   ]);
+  const ideas = list.items;
   const total = counts.pending + counts.accepted + counts.produced + counts.rejected;
 
   return (
@@ -66,7 +75,7 @@ export default async function IdeasPage({
           return (
             <Link
               key={t.key}
-              href={`/dashboard/ideas?status=${t.key}`}
+              href={`/dashboard/ideas?status=${t.key}&page=1`}
               className={`px-3 py-2 text-sm border-b-2 -mb-px transition ${
                 active
                   ? "border-primary text-foreground"
@@ -90,29 +99,134 @@ export default async function IdeasPage({
           </p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          {ideas.map((idea) => (
-            <IdeaCard
-              key={idea.id}
-              idea={{
-                id: idea.id,
-                title: idea.title,
-                hook: idea.hook,
-                outline: idea.outline,
-                rationale: idea.rationale,
-                format: idea.format,
-                tags: idea.tags,
-                status: idea.status,
-                source: idea.source,
-                submittedBy: idea.submittedBy,
-                aiScore: idea.aiScore,
-                modelUsed: idea.modelUsed,
-                createdAt: idea.createdAt,
-              }}
-            />
-          ))}
-        </div>
+        <>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            {ideas.map((idea) => (
+              <IdeaCard
+                key={idea.id}
+                idea={{
+                  id: idea.id,
+                  title: idea.title,
+                  hook: idea.hook,
+                  outline: idea.outline,
+                  rationale: idea.rationale,
+                  format: idea.format,
+                  tags: idea.tags,
+                  status: idea.status,
+                  source: idea.source,
+                  submittedBy: idea.submittedBy,
+                  aiScore: idea.aiScore,
+                  modelUsed: idea.modelUsed,
+                  createdAt: idea.createdAt,
+                }}
+              />
+            ))}
+          </div>
+          <Pagination
+            status={status}
+            page={list.page}
+            totalPages={list.totalPages}
+            total={list.total}
+            perPage={list.perPage}
+          />
+        </>
       )}
     </div>
+  );
+}
+
+function Pagination({
+  status,
+  page,
+  totalPages,
+  total,
+  perPage,
+}: {
+  status: Status;
+  page: number;
+  totalPages: number;
+  total: number;
+  perPage: number;
+}) {
+  if (totalPages <= 1) {
+    return (
+      <p className="text-xs text-muted-foreground font-mono text-center">
+        {total} idea{total === 1 ? "" : "s"}
+      </p>
+    );
+  }
+
+  const start = (page - 1) * perPage + 1;
+  const end = Math.min(page * perPage, total);
+
+  // Build a windowed page list around the current page so we don't render
+  // 50 buttons when there are 50 pages. Always include first + last.
+  const windowSize = 1;
+  const pages: Array<number | "..."> = [];
+  for (let i = 1; i <= totalPages; i++) {
+    if (i === 1 || i === totalPages || Math.abs(i - page) <= windowSize) {
+      pages.push(i);
+    } else if (pages[pages.length - 1] !== "...") {
+      pages.push("...");
+    }
+  }
+
+  const linkFor = (n: number) => `/dashboard/ideas?status=${status}&page=${n}`;
+
+  return (
+    <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2">
+      <p className="text-xs text-muted-foreground font-mono">
+        Showing {start}–{end} of {total}
+      </p>
+      <nav className="flex items-center gap-1" aria-label="Pagination">
+        <PageBtn href={page > 1 ? linkFor(page - 1) : null} aria-label="Previous page">
+          <ChevronLeft className="size-4" />
+        </PageBtn>
+        {pages.map((p, i) =>
+          p === "..." ? (
+            <span key={`gap-${i}`} className="px-2 text-xs text-muted-foreground/60 font-mono">
+              …
+            </span>
+          ) : (
+            <PageBtn key={p} href={linkFor(p)} active={p === page}>
+              {p}
+            </PageBtn>
+          )
+        )}
+        <PageBtn href={page < totalPages ? linkFor(page + 1) : null} aria-label="Next page">
+          <ChevronRight className="size-4" />
+        </PageBtn>
+      </nav>
+    </div>
+  );
+}
+
+function PageBtn({
+  href,
+  active,
+  children,
+  ...rest
+}: {
+  href: string | null;
+  active?: boolean;
+  children: React.ReactNode;
+  "aria-label"?: string;
+}) {
+  const cls = `inline-flex items-center justify-center min-w-[34px] h-9 px-2.5 rounded text-sm transition border ${
+    active
+      ? "bg-primary text-primary-foreground border-primary"
+      : "border-border text-muted-foreground hover:text-foreground hover:bg-secondary"
+  }`;
+  if (!href) {
+    return (
+      <span className={`${cls} opacity-40 pointer-events-none`} {...rest}>
+        {children}
+      </span>
+    );
+  }
+  return (
+    <Link href={href} className={cls} {...rest}>
+      {children}
+    </Link>
   );
 }

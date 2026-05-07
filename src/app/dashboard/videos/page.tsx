@@ -6,6 +6,7 @@ import { formatNumber, formatDuration, timeAgo } from "@/lib/utils";
 import { ExternalLink, TrendingUp } from "lucide-react";
 import { getVideoSpikes24h } from "@/lib/video-snapshots";
 import { projectVideo } from "@/lib/video-projections";
+import { getFittedTaus } from "@/lib/video-curve-fit";
 
 export const metadata = { title: "Videos" };
 export const dynamic = "force-dynamic";
@@ -58,7 +59,10 @@ export default async function VideosPage({
       ? [...filtered].sort((a, b) => b.engagement - a.engagement)
       : filtered;
 
-  const spikes = await getVideoSpikes24h(filtered.map((v) => v.id));
+  const [spikes, taus] = await Promise.all([
+    getVideoSpikes24h(filtered.map((v) => v.id)),
+    getFittedTaus(),
+  ]);
 
   const counts = {
     all: videos.length,
@@ -75,6 +79,16 @@ export default async function VideosPage({
         <h1 className="text-3xl font-semibold tracking-tight">All uploads</h1>
         <p className="text-muted-foreground mt-1">
           Latest {videos.length} videos. Click a row to drill in.
+        </p>
+        <p className="text-[11px] font-mono text-muted-foreground/70 mt-1.5">
+          Projections · long-form τ={taus.tauLong.toFixed(1)}d{" "}
+          <span className={taus.source.long === "fitted" ? "text-emerald-400" : "text-muted-foreground/50"}>
+            ({taus.source.long === "fitted" ? `fitted from ${taus.longSamples} videos` : "default — need 3+ matured videos"})
+          </span>
+          {" · "}Shorts τ={taus.tauShort.toFixed(1)}d{" "}
+          <span className={taus.source.short === "fitted" ? "text-emerald-400" : "text-muted-foreground/50"}>
+            ({taus.source.short === "fitted" ? `fitted from ${taus.shortSamples} videos` : "default — need 3+ matured Shorts"})
+          </span>
         </p>
       </div>
 
@@ -174,7 +188,13 @@ export default async function VideosPage({
                     <td className="px-4 py-3 text-right tabular-nums">{formatNumber(v.likes)}</td>
                     <td className="px-4 py-3 text-right tabular-nums">{v.engagement.toFixed(2)}%</td>
                     {(() => {
-                      const p = projectVideo({ views: v.views, publishedAt: v.publishedAt, isShort: v.isShort });
+                      const p = projectVideo({
+                        views: v.views,
+                        publishedAt: v.publishedAt,
+                        isShort: v.isShort,
+                        tauLong: taus.tauLong,
+                        tauShort: taus.tauShort,
+                      });
                       const baseClass = p.confidence === "low" ? "text-muted-foreground" : "text-foreground";
                       const cell = (val: number | null, milestone: number) => {
                         if (val === null) return <span className="text-muted-foreground/50">—</span>;

@@ -12,6 +12,8 @@
 // per-channel fit we'd backfit τ from real video curves, but this is
 // good enough for an MVP.
 
+// Hardcoded fallbacks. Real τ values come from `video-curve-fit.ts`,
+// which backfits per-channel from snapshot history.
 const TAU_LONG_DAYS = 14;
 const TAU_SHORT_DAYS = 5;
 
@@ -54,13 +56,19 @@ export function projectVideo(input: {
   publishedAt: Date | string;
   isShort: boolean;
   now?: Date;
+  // Optional channel-fitted τ values (from video-curve-fit). When
+  // omitted, falls back to the hardcoded defaults.
+  tauLong?: number;
+  tauShort?: number;
 }): VideoProjection {
   const now = input.now ?? new Date();
   const published = typeof input.publishedAt === "string"
     ? new Date(input.publishedAt)
     : input.publishedAt;
   const ageDays = (now.getTime() - published.getTime()) / (24 * 60 * 60 * 1000);
-  const tau = input.isShort ? TAU_SHORT_DAYS : TAU_LONG_DAYS;
+  const tau = input.isShort
+    ? (input.tauShort ?? TAU_SHORT_DAYS)
+    : (input.tauLong ?? TAU_LONG_DAYS);
 
   const base: VideoProjection = {
     ageDays,
@@ -111,7 +119,7 @@ export function projectVideo(input: {
 // Convenience: project an entire list at once (for the videos table).
 export function projectVideos<T extends { views: number; publishedAt: string; isShort: boolean }>(
   videos: T[],
-  now: Date = new Date()
+  opts: { now?: Date; tauLong?: number; tauShort?: number } = {}
 ): Array<T & { projection: VideoProjection }> {
   return videos.map((v) => ({
     ...v,
@@ -119,7 +127,9 @@ export function projectVideos<T extends { views: number; publishedAt: string; is
       views: v.views,
       publishedAt: v.publishedAt,
       isShort: v.isShort,
-      now,
+      now: opts.now,
+      tauLong: opts.tauLong,
+      tauShort: opts.tauShort,
     }),
   }));
 }

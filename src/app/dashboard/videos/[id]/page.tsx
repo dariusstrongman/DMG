@@ -8,6 +8,7 @@ import { getVideoHistory } from "@/lib/video-snapshots";
 import { formatNumber, formatDuration, timeAgo } from "@/lib/utils";
 import { VideoSnapshotChart } from "@/components/dashboard/video-snapshot-chart";
 import { projectVideo } from "@/lib/video-projections";
+import { getFittedTaus } from "@/lib/video-curve-fit";
 
 export const dynamic = "force-dynamic";
 
@@ -24,12 +25,19 @@ export default async function VideoDetailPage({
   const video = snap.videos.find((v) => v.id === id);
   if (!video) notFound();
 
-  const history = await getVideoHistory(id, 90);
+  const [history, taus] = await Promise.all([
+    getVideoHistory(id, 90),
+    getFittedTaus(),
+  ]);
   const projection = projectVideo({
     views: video.views,
     publishedAt: video.publishedAt,
     isShort: video.isShort,
+    tauLong: taus.tauLong,
+    tauShort: taus.tauShort,
   });
+  const tauUsed = video.isShort ? taus.tauShort : taus.tauLong;
+  const tauSource = video.isShort ? taus.source.short : taus.source.long;
 
   let delta24h: number | null = null;
   if (history.length >= 2) {
@@ -105,7 +113,11 @@ export default async function VideoDetailPage({
               Projected trajectory
             </CardTitle>
             <CardDescription>
-              Based on this video's current views ({formatNumber(projection.current)} at day {projection.ageDays.toFixed(1)}) and the typical view-decay curve for {projection.isShort ? "Shorts" : "long-form"}.
+              Based on this video's current views ({formatNumber(projection.current)} at day {projection.ageDays.toFixed(1)}) and the view-decay curve for {projection.isShort ? "Shorts" : "long-form"} (τ={tauUsed.toFixed(1)}d,{" "}
+              <span className={tauSource === "fitted" ? "text-emerald-400" : ""}>
+                {tauSource}
+              </span>
+              ).
               <span className="ml-1 font-mono uppercase tracking-widest text-[10px] text-muted-foreground">
                 · confidence: {projection.confidence}
               </span>

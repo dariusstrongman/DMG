@@ -1,11 +1,9 @@
-"use client";
-
 import { Search, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
-export function Topbar() {
+export function Topbar({ slot }: { slot?: React.ReactNode }) {
   return (
-    <header className="h-14 pl-16 pr-4 lg:pl-6 lg:pr-6 flex items-center justify-between border-b border-border/60 bg-background/50 backdrop-blur-md">
+    <header className="h-14 pl-16 pr-4 lg:pl-6 lg:pr-6 flex items-center justify-between gap-4 border-b border-border/60 bg-background/50 backdrop-blur-md">
       <div className="flex-1 max-w-xl">
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
@@ -19,12 +17,15 @@ export function Topbar() {
         </div>
       </div>
 
-      <form action="/auth/signout" method="POST">
-        <Button type="submit" variant="ghost" size="sm" className="gap-2">
-          <LogOut className="size-4" />
-          Sign out
-        </Button>
-      </form>
+      <div className="flex items-center gap-3">
+        {slot}
+        <form action="/auth/signout" method="POST">
+          <Button type="submit" variant="ghost" size="sm" className="gap-2">
+            <LogOut className="size-4" />
+            Sign out
+          </Button>
+        </form>
+      </div>
     </header>
   );
 }

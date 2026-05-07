@@ -4,9 +4,11 @@
 // `DMG_AUTH_SECRET`. Both must be set in production.
 
 const COOKIE_NAME = "dmg_session";
+const PERSONAL_COOKIE_NAME = "dmg_personal";
 const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 
 export const SESSION_COOKIE = COOKIE_NAME;
+export const PERSONAL_SESSION_COOKIE = PERSONAL_COOKIE_NAME;
 
 function getSecret(): string {
   const s = process.env.DMG_AUTH_SECRET;
@@ -23,6 +25,10 @@ function getSecret(): string {
 
 function getPassword(): string | null {
   return process.env.DMG_PASSWORD || null;
+}
+
+function getPersonalPassword(): string | null {
+  return process.env.PERSONAL_PASSWORD || null;
 }
 
 // HMAC-SHA-256 using Web Crypto (works in both Edge and Node runtimes).
@@ -71,6 +77,39 @@ export function checkPassword(input: string): boolean {
   if (input.length !== real.length) return false;
   let diff = 0;
   for (let i = 0; i < input.length; i++) diff |= input.charCodeAt(i) ^ real.charCodeAt(i);
+  return diff === 0;
+}
+
+export function checkPersonalPassword(input: string): boolean {
+  const real = getPersonalPassword();
+  if (!real) return false;
+  if (input.length !== real.length) return false;
+  let diff = 0;
+  for (let i = 0; i < input.length; i++) diff |= input.charCodeAt(i) ^ real.charCodeAt(i);
+  return diff === 0;
+}
+
+// Personal-channel session token. Same HMAC scheme as the main session,
+// scoped via a domain prefix so a leaked main-session token can't be
+// reinterpreted as a personal-session token.
+export async function createPersonalSessionToken(): Promise<string> {
+  const exp = Date.now() + SESSION_TTL_MS;
+  const payload = "personal:" + String(exp);
+  const sig = await hmacHex(getSecret(), payload);
+  return `${exp}.${sig}`;
+}
+
+export async function verifyPersonalSessionToken(token: string | undefined | null): Promise<boolean> {
+  if (!token) return false;
+  const parts = token.split(".");
+  if (parts.length !== 2) return false;
+  const [expStr, sig] = parts;
+  const exp = Number(expStr);
+  if (!Number.isFinite(exp) || exp < Date.now()) return false;
+  const expected = await hmacHex(getSecret(), "personal:" + expStr);
+  if (sig.length !== expected.length) return false;
+  let diff = 0;
+  for (let i = 0; i < sig.length; i++) diff |= sig.charCodeAt(i) ^ expected.charCodeAt(i);
   return diff === 0;
 }
 

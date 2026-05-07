@@ -7,6 +7,7 @@ import { db } from "./db";
 import { fetchDmgSnapshot } from "./youtube";
 import { chatJson } from "./openai";
 import { DMG_BRAND, DMG_HANDLE } from "./config";
+import { getActiveChannel } from "./active-channel";
 
 const MODEL = "gpt-4o-mini";
 
@@ -18,7 +19,8 @@ type DigestPayload = {
 };
 
 export async function generateWeeklyDigest() {
-  const snap = await fetchDmgSnapshot(50);
+  const __ch = await getActiveChannel();
+  const snap = await fetchDmgSnapshot(50, __ch.handle);
   if ("error" in snap) throw new Error(snap.error);
   const { channel, videos } = snap;
 
@@ -65,7 +67,7 @@ export async function generateWeeklyDigest() {
   const system = [
     `Today is ${todayLong} (${todayIso}). Treat this as the present. Your training data may be older — do not assume any year other than the one above.`,
     "",
-    `You are a YouTube growth analyst for ${DMG_BRAND} (${DMG_HANDLE}).`,
+    `You are a YouTube growth analyst for ${__ch.brand} (${__ch.handle}).`,
     "Write a sharp weekly digest. Be specific. Cite real numbers from the data shown. Reference real video titles when relevant.",
     "Tone: like a smart friend who watches the channel. No marketing-speak. No em-dashes. No 'leverage', 'unlock', 'streamline', 'level up'.",
     "Sections required in JSON:",

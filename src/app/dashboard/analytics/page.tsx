@@ -1,6 +1,7 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import Link from "next/link";
 import { fetchDmgSnapshot } from "@/lib/youtube";
+import { getActiveChannel } from "@/lib/active-channel";
 import { formatNumber, formatDuration } from "@/lib/utils";
 import { CadenceChart, EngagementScatter, ViewsBarChart } from "./analytics-charts";
 import { Sparkles } from "lucide-react";
@@ -19,7 +20,8 @@ export const metadata = { title: "Analytics" };
 export const dynamic = "force-dynamic";
 
 export default async function AnalyticsPage() {
-  const snap = await fetchDmgSnapshot(50);
+  const __ch = await getActiveChannel();
+  const snap = await fetchDmgSnapshot(50, __ch.handle);
 
   if ("error" in snap) {
     return (

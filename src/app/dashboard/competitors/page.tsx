@@ -5,6 +5,7 @@ import {
   getCompetitorHistory,
 } from "@/lib/competitors";
 import { fetchDmgSnapshot } from "@/lib/youtube";
+import { getActiveChannel } from "@/lib/active-channel";
 import { getSubscriberHistory } from "@/lib/snapshots";
 import { AddCompetitorForm } from "@/components/dashboard/competitors/add-competitor-form";
 import { CompetitorRow } from "@/components/dashboard/competitors/competitor-row";
@@ -18,9 +19,10 @@ export const dynamic = "force-dynamic";
 
 export default async function CompetitorsPage() {
   await refreshCompetitorSnapshots();
+  const __ch = await getActiveChannel();
   const [rows, snap] = await Promise.all([
     listCompetitorsWithLatest(),
-    fetchDmgSnapshot(1),
+    fetchDmgSnapshot(1, __ch.handle),
   ]);
   const channelSubs = "error" in snap ? 0 : snap.channel.subscribers;
   const channelTitle = "error" in snap ? "You" : snap.channel.title;

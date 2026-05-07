@@ -7,6 +7,7 @@ import { chatJson } from "./openai";
 import type { ChannelStats, VideoStats } from "./youtube";
 import { fetchDmgSnapshot } from "./youtube";
 import { DMG_BRAND, DMG_HANDLE } from "./config";
+import { getActiveChannel } from "./active-channel";
 
 const MODEL = "gpt-4o-mini";
 const DEFAULT_COUNT = 5;
@@ -76,7 +77,8 @@ function buildPrompt(
   channel: ChannelStats,
   videos: VideoStats[],
   count: number,
-  feedback: { rejected: FeedbackIdea[]; accepted: FeedbackIdea[] }
+  feedback: { rejected: FeedbackIdea[]; accepted: FeedbackIdea[] },
+  branding: { brand: string; handle: string }
 ) {
   // Pick the most recent 30 uploads, plus the top 5 by views as anchors.
   const recent = videos.slice(0, 30);
@@ -100,7 +102,7 @@ function buildPrompt(
   const system = [
     `Today is ${todayLong} (${todayIso}). Treat this as the present. Your training data may be older — do NOT use stale year references like "2023" or "2024" in titles unless the topic is genuinely about that year. Default to evergreen phrasing or the current year if a year is needed.`,
     "",
-    `You are a YouTube content strategist for ${DMG_BRAND} (${DMG_HANDLE}).`,
+    `You are a YouTube content strategist for ${branding.brand} (${branding.handle}).`,
     "Your job: study what the channel already publishes, then propose fresh video ideas that match its tone, format, and audience.",
     "",
     "Rules for ideas:",
@@ -173,7 +175,8 @@ function buildPrompt(
 // Throws if OpenAI key is missing or API call fails. Caller should catch
 // and surface a friendly error.
 export async function generateIdeas(count: number = DEFAULT_COUNT) {
-  const snap = await fetchDmgSnapshot(50);
+  const __ch = await getActiveChannel();
+  const snap = await fetchDmgSnapshot(50, __ch.handle);
   if ("error" in snap) {
     throw new Error(`Cannot generate ideas: ${snap.error}`);
   }
@@ -196,7 +199,7 @@ export async function generateIdeas(count: number = DEFAULT_COUNT) {
   });
 
   const feedback = await getIdeaFeedback();
-  const { system, user } = buildPrompt(channel, videos, count, feedback);
+  const { system, user } = buildPrompt(channel, videos, count, feedback, { brand: __ch.brand, handle: __ch.handle });
   const { data, modelUsed } = await chatJson<GenerateResponse>({
     model: MODEL,
     system,
@@ -246,7 +249,8 @@ export async function scoreIdeaForChannel(idea: {
   outline?: string;
   format?: "long" | "short" | "either";
 }): Promise<{ score: number; modelUsed: string } | null> {
-  const snap = await fetchDmgSnapshot(50);
+  const __ch = await getActiveChannel();
+  const snap = await fetchDmgSnapshot(50, __ch.handle);
   if ("error" in snap) return null;
   const { channel, videos } = snap;
 
@@ -257,7 +261,7 @@ export async function scoreIdeaForChannel(idea: {
   const todayIso = new Date().toISOString().slice(0, 10);
   const system = [
     `Today is ${todayIso}. Treat as the present.`,
-    `You are a YouTube content strategist for ${DMG_BRAND} (${DMG_HANDLE}).`,
+    `You are a YouTube content strategist for ${__ch.brand} (${__ch.handle}).`,
     "Score the supplied idea 1-10 for viral potential ON THIS CHANNEL specifically.",
     "10 = unmissable banger. 7 = solid hit. 5 = mid. 3 = unlikely. 1 = misses the audience.",
     "Be honest. Don't grade-inflate. One short sentence rationale is fine.",
@@ -367,7 +371,8 @@ export async function createManualIdea(opts: {
   format?: "long" | "short" | "either";
   tags?: string[];
 }) {
-  const snap = await fetchDmgSnapshot(1);
+  const __ch = await getActiveChannel();
+  const snap = await fetchDmgSnapshot(1, __ch.handle);
   if ("error" in snap) throw new Error(snap.error);
   const channelRow = await db.channel.upsert({
     where: { ytChannelId: snap.channel.id },

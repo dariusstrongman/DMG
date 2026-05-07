@@ -2,6 +2,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import Link from "next/link";
 import Image from "next/image";
 import { fetchDmgSnapshot } from "@/lib/youtube";
+import { getActiveChannel } from "@/lib/active-channel";
 import { formatNumber, formatDuration, timeAgo } from "@/lib/utils";
 import { ExternalLink, TrendingUp } from "lucide-react";
 import { getVideoSpikes24h } from "@/lib/video-snapshots";
@@ -27,7 +28,8 @@ export default async function VideosPage({
   const sort: "views" | "engagement" | "recent" =
     sp.sort === "views" ? "views" : sp.sort === "engagement" ? "engagement" : "recent";
 
-  const snap = await fetchDmgSnapshot(50);
+  const __ch = await getActiveChannel();
+  const snap = await fetchDmgSnapshot(50, __ch.handle);
   if ("error" in snap) {
     return (
       <Card className="max-w-2xl mx-auto">

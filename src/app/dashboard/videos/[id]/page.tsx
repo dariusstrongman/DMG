@@ -4,6 +4,7 @@ import Image from "next/image";
 import { notFound } from "next/navigation";
 import { ArrowLeft, ExternalLink, TrendingUp, Sparkles } from "lucide-react";
 import { fetchDmgSnapshot } from "@/lib/youtube";
+import { getActiveChannel } from "@/lib/active-channel";
 import { getVideoHistory } from "@/lib/video-snapshots";
 import { formatNumber, formatDuration, timeAgo } from "@/lib/utils";
 import { VideoSnapshotChart } from "@/components/dashboard/video-snapshot-chart";
@@ -18,7 +19,8 @@ export default async function VideoDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const snap = await fetchDmgSnapshot(50);
+  const __ch = await getActiveChannel();
+  const snap = await fetchDmgSnapshot(50, __ch.handle);
   if ("error" in snap) {
     return <p className="text-sm text-muted-foreground">Cannot load: {snap.error}</p>;
   }

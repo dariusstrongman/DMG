@@ -4,6 +4,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { fetchDmgSnapshot } from "@/lib/youtube";
 import { DMG_HANDLE } from "@/lib/config";
+import { getActiveChannel } from "@/lib/active-channel";
 import { getSettings } from "@/lib/settings";
 import { formatNumber, formatDuration, timeAgo } from "@/lib/utils";
 import {
@@ -21,8 +22,9 @@ export const dynamic = "force-dynamic";
 export const revalidate = 300;
 
 export default async function DashboardOverview() {
+  const activeChannel = await getActiveChannel();
   const [snap, settings] = await Promise.all([
-    fetchDmgSnapshot(50),
+    fetchDmgSnapshot(50, activeChannel.handle),
     getSettings(),
   ]);
 

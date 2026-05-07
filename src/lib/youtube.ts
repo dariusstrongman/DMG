@@ -241,9 +241,9 @@ export async function getRecentUploads(
 // a setup-required state instead of crashing.
 export type DmgSnapshot = { channel: ChannelStats; videos: VideoStats[] };
 
-export async function fetchDmgSnapshot(maxVideos = 50): Promise<DmgSnapshot | { error: string }> {
+export async function fetchDmgSnapshot(maxVideos = 50, handle?: string): Promise<DmgSnapshot | { error: string }> {
   try {
-    const channel = await getChannelByHandle();
+    const channel = await getChannelByHandle(handle);
     const videos = await getRecentUploads(channel.uploadsPlaylistId, maxVideos);
     return { channel, videos };
   } catch (e) {

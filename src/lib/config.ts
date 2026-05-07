@@ -1,16 +1,51 @@
-// The single channel this dashboard tracks. Used by every server-side
-// fetch. No DB lookup needed, DMG is single-tenant.
-export const DMG_HANDLE = "@dmgdaily";
-export const DMG_BRAND = "DMG Daily";
+// Channel registry. Each entry is one YouTube channel that has a row in
+// the `dmg_channels` table. The single-channel constants below
+// (DMG_HANDLE, DMG_BRAND, etc.) point at the default channel for
+// backward-compat; new code should use CHANNELS or getActiveChannel().
 
-// Subscriber milestone shown on the dashboard. When crossed, bump it
-// to the next round number (50k, 100k, ...).
-export const SUBSCRIBER_GOAL = 10_000;
+export type ChannelConfig = {
+  slug: string;             // URL-safe id used by the switcher
+  handle: string;           // YouTube @handle
+  brand: string;            // display name
+  timezone: string;         // IANA tz for posting-time analytics
+  subscriberGoal: number;
+  subscriberGoalDeadline: string | null;
+  // If true, requires the personal password gate (PERSONAL_PASSWORD env)
+  // on top of the regular DMG password.
+  personal: boolean;
+};
 
-// Optional ISO date (yyyy-mm-dd) for "on pace / behind / ahead" framing.
-// Leave null to just show ETA without pass/fail framing.
-export const SUBSCRIBER_GOAL_DEADLINE: string | null = null;
+export const CHANNELS: ChannelConfig[] = [
+  {
+    slug: "dmg",
+    handle: "@dmgdaily",
+    brand: "DMG Daily",
+    timezone: "America/Chicago",
+    subscriberGoal: 10_000,
+    subscriberGoalDeadline: null,
+    personal: false,
+  },
+  {
+    slug: "rush",
+    handle: "@RushToons",
+    brand: "Rush Toons",
+    timezone: "America/Chicago",
+    subscriberGoal: 1_000,
+    subscriberGoalDeadline: null,
+    personal: true,
+  },
+];
 
-// Used by analytics to show day-of-week / hour-of-day in local time
-// instead of UTC. IANA timezone string. Change if you move.
-export const CHANNEL_TIMEZONE = "America/Chicago";
+export const DEFAULT_CHANNEL: ChannelConfig = CHANNELS[0];
+
+export function getChannelBySlug(slug: string | null | undefined): ChannelConfig {
+  if (!slug) return DEFAULT_CHANNEL;
+  return CHANNELS.find((c) => c.slug === slug) ?? DEFAULT_CHANNEL;
+}
+
+// ─── legacy single-channel exports (kept so existing imports compile) ───
+export const DMG_HANDLE = DEFAULT_CHANNEL.handle;
+export const DMG_BRAND = DEFAULT_CHANNEL.brand;
+export const SUBSCRIBER_GOAL = DEFAULT_CHANNEL.subscriberGoal;
+export const SUBSCRIBER_GOAL_DEADLINE: string | null = DEFAULT_CHANNEL.subscriberGoalDeadline;
+export const CHANNEL_TIMEZONE = DEFAULT_CHANNEL.timezone;

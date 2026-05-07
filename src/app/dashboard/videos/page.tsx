@@ -133,7 +133,9 @@ export default async function VideosPage({
                 <th className="text-right px-4 py-3 font-medium">24h</th>
                 <th className="text-right px-4 py-3 font-medium">Likes</th>
                 <th className="text-right px-4 py-3 font-medium">Engagement</th>
-                <th className="text-right px-4 py-3 font-medium" title="Projected views by day 30, based on view-decay curve. Long-form τ=14d, Shorts τ=5d.">Proj 30d</th>
+                <th className="text-right px-3 py-3 font-medium" title="Projected views by day 7. (actual) once the video is past 7 days old.">Proj 7d</th>
+                <th className="text-right px-3 py-3 font-medium" title="Projected views by day 15.">Proj 15d</th>
+                <th className="text-right px-3 py-3 font-medium" title="Projected views by day 30. Based on view-decay curve: long-form τ=14d, Shorts τ=5d.">Proj 30d</th>
                 <th className="px-2 py-3"></th>
               </tr>
             </thead>
@@ -171,23 +173,29 @@ export default async function VideosPage({
                     </td>
                     <td className="px-4 py-3 text-right tabular-nums">{formatNumber(v.likes)}</td>
                     <td className="px-4 py-3 text-right tabular-nums">{v.engagement.toFixed(2)}%</td>
-                    <td className="px-4 py-3 text-right tabular-nums">
-                      {(() => {
-                        const p = projectVideo({ views: v.views, publishedAt: v.publishedAt, isShort: v.isShort });
-                        if (p.proj30 === null) {
-                          return <span className="text-muted-foreground/50">—</span>;
-                        }
-                        const lift = p.proj30 - v.views;
+                    {(() => {
+                      const p = projectVideo({ views: v.views, publishedAt: v.publishedAt, isShort: v.isShort });
+                      const baseClass = p.confidence === "low" ? "text-muted-foreground" : "text-foreground";
+                      const cell = (val: number | null, milestone: number) => {
+                        if (val === null) return <span className="text-muted-foreground/50">—</span>;
+                        const isPast = milestone <= p.ageDays;
                         return (
                           <span
-                            className={p.confidence === "low" ? "text-muted-foreground" : "text-foreground"}
-                            title={`Projected day-30 views. +${formatNumber(lift)} expected from now (confidence: ${p.confidence}).`}
+                            className={isPast ? "text-muted-foreground" : baseClass}
+                            title={isPast ? "Already past this milestone — actual views" : `Confidence: ${p.confidence}`}
                           >
-                            {formatNumber(p.proj30)}
+                            {formatNumber(val)}
                           </span>
                         );
-                      })()}
-                    </td>
+                      };
+                      return (
+                        <>
+                          <td className="px-3 py-3 text-right tabular-nums">{cell(p.proj7, 7)}</td>
+                          <td className="px-3 py-3 text-right tabular-nums">{cell(p.proj15, 15)}</td>
+                          <td className="px-3 py-3 text-right tabular-nums">{cell(p.proj30, 30)}</td>
+                        </>
+                      );
+                    })()}
                     <td className="px-2 py-3">
                       <Link
                         href={`https://youtube.com/watch?v=${v.id}`}

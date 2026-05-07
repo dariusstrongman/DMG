@@ -10,17 +10,16 @@ import { ScoreUnscoredButton } from "@/components/dashboard/ideas/score-unscored
 export const dynamic = "force-dynamic";
 
 const STATUS_TABS = [
-  { key: "all", label: "All" },
   { key: "pending", label: "Pending" },
   { key: "accepted", label: "Accepted" },
   { key: "produced", label: "Produced" },
   { key: "rejected", label: "Rejected" },
 ] as const;
 
-type Status = "all" | "pending" | "accepted" | "produced" | "rejected";
+type Status = "pending" | "accepted" | "produced" | "rejected";
 
 function isStatus(s: string | undefined): s is Status {
-  return s === "all" || s === "pending" || s === "accepted" || s === "produced" || s === "rejected";
+  return s === "pending" || s === "accepted" || s === "produced" || s === "rejected";
 }
 
 const PER_PAGE = 10;
@@ -37,7 +36,7 @@ export default async function IdeasPage({
 
   const [list, counts, unscored] = await Promise.all([
     listIdeas({
-      status: status === "all" ? "all" : status,
+      status,
       page: requestedPage,
       perPage: PER_PAGE,
     }),
@@ -71,7 +70,7 @@ export default async function IdeasPage({
       <div className="flex flex-wrap gap-1 border-b border-border">
         {STATUS_TABS.map((t) => {
           const active = status === t.key;
-          const n = t.key === "all" ? total : counts[t.key as keyof typeof counts] ?? 0;
+          const n = counts[t.key];
           return (
             <Link
               key={t.key}

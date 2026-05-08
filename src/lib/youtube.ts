@@ -7,6 +7,7 @@
 // Quota: each call below is 1 unit. Daily quota is 10,000 units, so even at
 // one render per minute we're at ~432 units/day worst case.
 
+import { cache } from "react";
 import { DMG_HANDLE } from "./config";
 
 const YT_API = "https://www.googleapis.com/youtube/v3";
@@ -241,16 +242,21 @@ export async function getRecentUploads(
 // a setup-required state instead of crashing.
 export type DmgSnapshot = { channel: ChannelStats; videos: VideoStats[] };
 
-export async function fetchDmgSnapshot(maxVideos = 50, handle?: string): Promise<DmgSnapshot | { error: string }> {
-  try {
-    const channel = await getChannelByHandle(handle);
-    const videos = await getRecentUploads(channel.uploadsPlaylistId, maxVideos);
-    return { channel, videos };
-  } catch (e) {
-    if (e instanceof YouTubeError) return { error: e.message };
-    return { error: e instanceof Error ? e.message : "Unknown error" };
-  }
-}
+// React cache() memoizes per-request: the analytics page calls this
+// once, but lib helpers (idea generator, AI digest, etc) used to call
+// it again from the same request. Now they all share one fetch.
+export const fetchDmgSnapshot = cache(
+  async (maxVideos = 50, handle?: string): Promise<DmgSnapshot | { error: string }> => {
+    try {
+      const channel = await getChannelByHandle(handle);
+      const videos = await getRecentUploads(channel.uploadsPlaylistId, maxVideos);
+      return { channel, videos };
+    } catch (e) {
+      if (e instanceof YouTubeError) return { error: e.message };
+      return { error: e instanceof Error ? e.message : "Unknown error" };
+    }
+  },
+);
 
 // ─────────── Helpers ───────────
 
@@ -267,12 +273,20 @@ async function isShortViaRedirect(
   videoId: string,
   fallbackDurationSec: number
 ): Promise<boolean> {
+  // Skip the probe entirely for clearly-long videos. YouTube's Shorts
+  // ceiling is 60s officially and 180s in some experiments — anything
+  // above 200s is unambiguously a long-form upload, no point spending
+  // an HTTP roundtrip on it. Same for very short clips: <20s without
+  // a vertical aspect is rare, and probing them only saves us in
+  // edge cases.
+  if (fallbackDurationSec > 200) return false;
+  if (fallbackDurationSec > 0 && fallbackDurationSec < 20) return true;
+
   try {
     const res = await fetch(`https://www.youtube.com/shorts/${videoId}`, {
       method: "GET",
       redirect: "manual",
       headers: {
-        // Without a UA, YouTube sometimes serves a different response.
         "User-Agent":
           "Mozilla/5.0 (compatible; DMGAnalytics/1.0; +https://dmg.stromation.com)",
       },

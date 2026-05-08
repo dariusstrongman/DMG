@@ -109,36 +109,49 @@ export async function getVideoHistory(
 
 // Returns a map ytVideoId → 24h delta. Null when there's no point ~24h
 // ago to compare against. Used for spike badges in the videos list.
+//
+// One findMany pulls all snapshots in the 18-30h window across every
+// video at once, then we pick the closest-to-24h-ago point per video
+// in memory. Avoids the N+1 query the original implementation did.
 export async function getVideoSpikes24h(
   ytVideoIds: string[]
 ): Promise<Record<string, number | null>> {
   const out: Record<string, number | null> = {};
   for (const id of ytVideoIds) out[id] = null;
+  if (ytVideoIds.length === 0) return out;
   try {
     const videos = await db.video.findMany({
       where: { ytVideoId: { in: ytVideoIds } },
       select: { id: true, ytVideoId: true, views: true },
     });
+    if (videos.length === 0) return out;
+
     const dayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
     const tolerance = 6 * 60 * 60 * 1000;
+    const lo = new Date(dayAgo.getTime() - tolerance);
+    const hi = new Date(dayAgo.getTime() + tolerance);
+
+    const internalIds = videos.map((v) => v.id);
+    const snaps = await db.videoSnapshot.findMany({
+      where: {
+        videoId: { in: internalIds },
+        capturedAt: { gte: lo, lte: hi },
+      },
+      select: { videoId: true, views: true, capturedAt: true },
+      orderBy: { capturedAt: "asc" },
+    });
+
+    // Earliest snapshot in window per video.
+    const earliest = new Map<string, { views: bigint; capturedAt: Date }>();
+    for (const s of snaps) {
+      if (!earliest.has(s.videoId)) {
+        earliest.set(s.videoId, { views: s.views as unknown as bigint, capturedAt: s.capturedAt });
+      }
+    }
 
     for (const v of videos) {
-      const match = await db.videoSnapshot.findFirst({
-        where: {
-          videoId: v.id,
-          capturedAt: {
-            gte: new Date(dayAgo.getTime() - tolerance),
-            lte: new Date(dayAgo.getTime() + tolerance),
-          },
-        },
-        orderBy: { capturedAt: "asc" },
-        select: { views: true },
-      });
-      if (!match) {
-        out[v.ytVideoId] = null;
-      } else {
-        out[v.ytVideoId] = Number(v.views) - Number(match.views);
-      }
+      const e = earliest.get(v.id);
+      out[v.ytVideoId] = e ? Number(v.views) - Number(e.views) : null;
     }
     return out;
   } catch {

@@ -36,7 +36,6 @@ export async function saveSettingsAction(formData: FormData) {
     revalidatePath("/settings");
     revalidatePath("/dashboard");
     revalidatePath("/dashboard/analytics");
-    revalidatePath("/dashboard/viral");
     return { ok: true as const };
   } catch (e) {
     return { ok: false as const, error: e instanceof Error ? e.message : "Unknown error" };

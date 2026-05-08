@@ -10,6 +10,25 @@ import { DMG_BRAND, DMG_HANDLE } from "./config";
 import { getActiveChannel } from "./active-channel";
 
 const MODEL = "gpt-4o-mini";
+
+// Resolves the active channel's DB id by going handle → YouTube channel
+// id → Channel row. Returns null if YouTube is unreachable or no row
+// exists yet (in which case callers fall back to "no channel filter",
+// which on a fresh personal channel just means an empty list).
+async function activeChannelDbId(): Promise<string | null> {
+  try {
+    const ch = await getActiveChannel();
+    const { getChannelByHandle } = await import("./youtube");
+    const live = await getChannelByHandle(ch.handle);
+    const row = await db.channel.findUnique({
+      where: { ytChannelId: live.id },
+      select: { id: true },
+    });
+    return row?.id ?? null;
+  } catch {
+    return null;
+  }
+}
 const DEFAULT_COUNT = 5;
 
 type GeneratedIdea = {
@@ -318,7 +337,12 @@ export async function listIdeas(filters: IdeaListFilters = {}): Promise<IdeaList
   const perPage = Math.max(1, Math.min(100, filters.perPage ?? 10));
   const page = Math.max(1, filters.page ?? 1);
   try {
-    const where: Record<string, unknown> = {};
+    const channelId = await activeChannelDbId();
+    if (!channelId) {
+      // No channel resolved → never leak ideas from another channel.
+      return { items: [], total: 0, page: 1, perPage, totalPages: 1 };
+    }
+    const where: Record<string, unknown> = { channelId };
     if (filters.status && filters.status !== "all") {
       where.status = filters.status;
     }
@@ -340,8 +364,11 @@ export async function listIdeas(filters: IdeaListFilters = {}): Promise<IdeaList
 
 export async function countIdeasByStatus() {
   try {
+    const channelId = await activeChannelDbId();
+    if (!channelId) return { pending: 0, accepted: 0, rejected: 0, produced: 0 };
     const groups = await db.videoIdea.groupBy({
       by: ["status"],
+      where: { channelId },
       _count: { _all: true },
     });
     const out: Record<string, number> = { pending: 0, accepted: 0, rejected: 0, produced: 0 };

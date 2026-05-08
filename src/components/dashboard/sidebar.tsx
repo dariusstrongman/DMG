@@ -12,7 +12,6 @@ import {
   Settings,
   TrendingUp,
   Lightbulb,
-  Flame,
   Menu,
   X,
 } from "lucide-react";
@@ -28,7 +27,6 @@ type Item = {
 const PRIMARY: Item[] = [
   { href: "/dashboard", label: "Overview", icon: LayoutDashboard },
   { href: "/dashboard/videos", label: "Videos", icon: Video },
-  { href: "/dashboard/viral", label: "Viral Pick of the Week", icon: Flame, badge: "AI" },
   { href: "/dashboard/ideas", label: "Ideas", icon: Lightbulb, badge: "AI" },
   { href: "/dashboard/analytics", label: "Analytics", icon: TrendingUp },
   { href: "/dashboard/ai", label: "AI Insights", icon: Sparkles },

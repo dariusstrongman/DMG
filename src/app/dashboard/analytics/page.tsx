@@ -10,6 +10,9 @@ import { FormatComparison } from "@/components/dashboard/format-comparison";
 import { TitlePatterns } from "@/components/dashboard/analytics/title-patterns";
 import { PerformanceBuckets } from "@/components/dashboard/analytics/performance-buckets";
 import { EngagementTrendChart } from "@/components/dashboard/analytics/engagement-trend";
+import { HitsVsFlops } from "@/components/dashboard/analytics/hits-vs-flops";
+import { LivePacing } from "@/components/dashboard/analytics/live-pacing";
+import { Playbook } from "@/components/dashboard/analytics/playbook";
 import { SubHistoryChart } from "@/components/dashboard/sub-history-chart";
 import { getSubscriberHistory } from "@/lib/snapshots";
 import { project, projectedLine } from "@/lib/projections";
@@ -110,9 +113,12 @@ export default async function AnalyticsPage() {
         />
       </Section>
 
-      {/* Section 2: What works */}
+      {/* Section 2: What works — the unique value of this dashboard */}
       <Section title="What works" subtitle="Patterns across your uploads. The data tells you where to lean.">
         <div className="space-y-4">
+          <HitsVsFlops videos={videos} timezone={settings.channelTimezone} />
+          <Playbook videos={videos} timezone={settings.channelTimezone} />
+          <LivePacing videos={videos} />
           <BestPostingTimes videos={videos} timezone={settings.channelTimezone} />
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             <FormatComparison videos={videos} />

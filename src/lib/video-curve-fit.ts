@@ -29,9 +29,12 @@ type Curve = {
 };
 
 async function getMaturedCurves(): Promise<Curve[]> {
+  const { getActiveChannelDbId } = await import("./active-channel");
+  const channelId = await getActiveChannelDbId();
+  if (!channelId) return [];
   const cutoff = new Date(Date.now() - MATURITY_AGE_DAYS * DAY_MS);
   const videos = await db.video.findMany({
-    where: { publishedAt: { lt: cutoff } },
+    where: { channelId, publishedAt: { lt: cutoff } },
     select: {
       publishedAt: true,
       format: true,

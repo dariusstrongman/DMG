@@ -45,6 +45,7 @@ model Channel {
   alerts    Alert[]
   ideas     VideoIdea[]
   viralPicks ViralPick[]
+  competitors Competitor[]
 
   @@map("dmg_channels")
 }
@@ -164,15 +165,22 @@ model VideoSnapshot {
 
 model Competitor {
   id           String   @id @default(cuid())
-  ytChannelId  String   @unique
+  // The channel that's tracking this competitor. Each tenant has its
+  // own competitor list; the same YouTube channel can be a competitor
+  // for multiple tenants (uniqueness is per (channelId, ytChannelId)).
+  channelId    String
+  ytChannelId  String
   title        String
   handle       String?
   thumbnailUrl String?
   notes        String?  @db.Text
   createdAt    DateTime @default(now())
 
+  channel   Channel              @relation(fields: [channelId], references: [id], onDelete: Cascade)
   snapshots CompetitorSnapshot[]
 
+  @@unique([channelId, ytChannelId])
+  @@index([channelId])
   @@map("dmg_competitors")
 }
 

@@ -1,9 +1,13 @@
 // Competitor tracking. Same write-through snapshot pattern as the main
 // channel: a row per ~hour into dmg_competitor_snapshots so we can
 // chart their growth alongside ours.
+//
+// Per-tenant: every Competitor row carries channelId. Adding "Linus
+// Tech Tips" as a competitor on DMG does not surface it on RushToons.
 
 import { db } from "./db";
 import { getChannelByHandle } from "./youtube";
+import { getActiveChannelDbId } from "./active-channel";
 
 const MIN_SNAPSHOT_INTERVAL_MS = 55 * 60 * 1000;
 
@@ -24,14 +28,17 @@ export type CompetitorWithLatest = {
   delta7d: { subscribers: number | null; totalViews: number | null };
 };
 
-// Add a competitor by @handle. Pulls live YT data, upserts, and
-// records the first snapshot.
+// Add a competitor by @handle. Pulls live YT data, upserts under the
+// active tenant's channelId, and records the first snapshot.
 export async function addCompetitor(rawHandle: string) {
+  const channelId = await getActiveChannelDbId();
+  if (!channelId) throw new Error("Active channel not resolved.");
   const handle = rawHandle.startsWith("@") ? rawHandle : `@${rawHandle.replace(/^https?:\/\/[^/]+\/(@?)/i, "@")}`;
   const channel = await getChannelByHandle(handle);
   const row = await db.competitor.upsert({
-    where: { ytChannelId: channel.id },
+    where: { channelId_ytChannelId: { channelId, ytChannelId: channel.id } },
     create: {
+      channelId,
       ytChannelId: channel.id,
       title: channel.title,
       handle: channel.handle,
@@ -55,13 +62,21 @@ export async function addCompetitor(rawHandle: string) {
 }
 
 export async function removeCompetitor(id: string) {
-  await db.competitor.delete({ where: { id } });
+  // Belt-and-suspenders: only delete if the row belongs to the active
+  // channel. Prevents cross-tenant deletion via guessed ids.
+  const channelId = await getActiveChannelDbId();
+  if (!channelId) return;
+  await db.competitor.deleteMany({ where: { id, channelId } });
 }
 
-// Fetches all competitors with their latest snapshot + 7d delta.
 export async function listCompetitorsWithLatest(): Promise<CompetitorWithLatest[]> {
   try {
-    const rows = await db.competitor.findMany({ orderBy: { createdAt: "asc" } });
+    const channelId = await getActiveChannelDbId();
+    if (!channelId) return [];
+    const rows = await db.competitor.findMany({
+      where: { channelId },
+      orderBy: { createdAt: "asc" },
+    });
     const out: CompetitorWithLatest[] = [];
     for (const r of rows) {
       const latest = await db.competitorSnapshot.findFirst({
@@ -113,11 +128,12 @@ export async function listCompetitorsWithLatest(): Promise<CompetitorWithLatest[
   }
 }
 
-// Refresh all competitors' snapshots (throttled). Called on competitor
-// page load so live data stays warm.
+// Refresh active-tenant competitors' snapshots (throttled).
 export async function refreshCompetitorSnapshots() {
   try {
-    const competitors = await db.competitor.findMany();
+    const channelId = await getActiveChannelDbId();
+    if (!channelId) return;
+    const competitors = await db.competitor.findMany({ where: { channelId } });
     for (const c of competitors) {
       const last = await db.competitorSnapshot.findFirst({
         where: { competitorId: c.id },

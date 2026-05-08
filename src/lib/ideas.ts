@@ -11,23 +11,10 @@ import { getActiveChannel } from "./active-channel";
 
 const MODEL = "gpt-4o-mini";
 
-// Resolves the active channel's DB id by going handle → YouTube channel
-// id → Channel row. Returns null if YouTube is unreachable or no row
-// exists yet (in which case callers fall back to "no channel filter",
-// which on a fresh personal channel just means an empty list).
+// Local alias so the existing call sites keep working.
 async function activeChannelDbId(): Promise<string | null> {
-  try {
-    const ch = await getActiveChannel();
-    const { getChannelByHandle } = await import("./youtube");
-    const live = await getChannelByHandle(ch.handle);
-    const row = await db.channel.findUnique({
-      where: { ytChannelId: live.id },
-      select: { id: true },
-    });
-    return row?.id ?? null;
-  } catch {
-    return null;
-  }
+  const { getActiveChannelDbId } = await import("./active-channel");
+  return getActiveChannelDbId();
 }
 const DEFAULT_COUNT = 5;
 
@@ -67,20 +54,21 @@ type FeedbackIdea = {
   aiScore: number | null;
 };
 
-async function getIdeaFeedback(): Promise<{
+async function getIdeaFeedback(channelId: string | null): Promise<{
   rejected: FeedbackIdea[];
   accepted: FeedbackIdea[];
 }> {
+  if (!channelId) return { rejected: [], accepted: [] };
   try {
     const [rejected, accepted] = await Promise.all([
       db.videoIdea.findMany({
-        where: { status: "rejected" },
+        where: { channelId, status: "rejected" },
         orderBy: { updatedAt: "desc" },
         take: FEEDBACK_LOOKBACK,
         select: { title: true, hook: true, format: true, tags: true, aiScore: true },
       }),
       db.videoIdea.findMany({
-        where: { status: { in: ["accepted", "produced"] } },
+        where: { channelId, status: { in: ["accepted", "produced"] } },
         orderBy: { updatedAt: "desc" },
         take: FEEDBACK_LOOKBACK,
         select: { title: true, hook: true, format: true, tags: true, aiScore: true },
@@ -217,7 +205,7 @@ export async function generateIdeas(count: number = DEFAULT_COUNT) {
     update: { title: channel.title, lastSyncedAt: new Date() },
   });
 
-  const feedback = await getIdeaFeedback();
+  const feedback = await getIdeaFeedback(channelRow.id);
   const { system, user } = buildPrompt(channel, videos, count, feedback, { brand: __ch.brand, handle: __ch.handle });
   const { data, modelUsed } = await chatJson<GenerateResponse>({
     model: MODEL,

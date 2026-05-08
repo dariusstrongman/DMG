@@ -41,3 +41,24 @@ export async function getActiveChannelHandle(): Promise<string> {
 export async function listAvailableChannels(): Promise<ChannelConfig[]> {
   return CHANNELS;
 }
+
+// Resolves the active channel's DB row id (dmg_channels.id). All other
+// tables join on this id for tenant scoping. Returns null if YouTube
+// is unreachable or the row doesn't exist yet — callers MUST treat
+// null as "return empty results" to avoid leaking another channel's
+// data.
+export async function getActiveChannelDbId(): Promise<string | null> {
+  try {
+    const ch = await getActiveChannel();
+    const { getChannelByHandle } = await import("./youtube");
+    const live = await getChannelByHandle(ch.handle);
+    const { db } = await import("./db");
+    const row = await db.channel.findUnique({
+      where: { ytChannelId: live.id },
+      select: { id: true },
+    });
+    return row?.id ?? null;
+  } catch {
+    return null;
+  }
+}

@@ -44,8 +44,11 @@ export async function setStatusAction(
 // useful if a generation skipped scoring for some reason.
 export async function scoreUnscoredIdeasAction() {
   try {
+    const { getActiveChannelDbId } = await import("@/lib/active-channel");
+    const channelId = await getActiveChannelDbId();
+    if (!channelId) return { ok: true as const, scored: 0, total: 0 };
     const targets = await db.videoIdea.findMany({
-      where: { aiScore: null },
+      where: { channelId, aiScore: null },
       select: { id: true, title: true, hook: true, outline: true, format: true },
       take: 50,
     });

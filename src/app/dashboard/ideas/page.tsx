@@ -2,6 +2,7 @@ import Link from "next/link";
 import { ChevronLeft, ChevronRight, Lightbulb } from "lucide-react";
 import { listIdeas, countIdeasByStatus } from "@/lib/ideas";
 import { db } from "@/lib/db";
+import { getActiveChannelDbId } from "@/lib/active-channel";
 import { IdeaCard } from "@/components/dashboard/ideas/idea-card";
 import { GenerateButton } from "@/components/dashboard/ideas/generate-button";
 import { ManualIdeaForm } from "@/components/dashboard/ideas/manual-idea-form";
@@ -34,6 +35,7 @@ export default async function IdeasPage({
   const pageParam = Number.parseInt(sp.page ?? "1", 10);
   const requestedPage = Number.isFinite(pageParam) && pageParam > 0 ? pageParam : 1;
 
+  const channelDbId = await getActiveChannelDbId();
   const [list, counts, unscored] = await Promise.all([
     listIdeas({
       status,
@@ -41,7 +43,9 @@ export default async function IdeasPage({
       perPage: PER_PAGE,
     }),
     countIdeasByStatus(),
-    db.videoIdea.count({ where: { aiScore: null } }).catch(() => 0),
+    channelDbId
+      ? db.videoIdea.count({ where: { channelId: channelDbId, aiScore: null } }).catch(() => 0)
+      : Promise.resolve(0),
   ]);
   const ideas = list.items;
   const total = counts.pending + counts.accepted + counts.produced + counts.rejected;

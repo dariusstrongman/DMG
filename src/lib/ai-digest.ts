@@ -122,8 +122,11 @@ export async function generateWeeklyDigest() {
 
 export async function getLatestWeeklyDigest() {
   try {
+    const { getActiveChannelDbId } = await import("./active-channel");
+    const channelId = await getActiveChannelDbId();
+    if (!channelId) return null;
     return await db.aiReport.findFirst({
-      where: { period: "weekly" },
+      where: { channelId, period: "weekly" },
       orderBy: { createdAt: "desc" },
     });
   } catch {

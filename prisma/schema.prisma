@@ -46,6 +46,7 @@ model Channel {
   ideas     VideoIdea[]
   viralPicks ViralPick[]
   competitors Competitor[]
+  tiktokAccount TiktokAccount?
 
   @@map("dmg_channels")
 }
@@ -314,4 +315,98 @@ model Alert {
 
   @@index([channelId])
   @@map("dmg_alerts")
+}
+
+// One TikTok connection per Channel (tenant). The auth tokens here are
+// scoped to the creator's Display API access — read-only profile, stats,
+// and video list. Tokens are refreshed by getValidTiktokToken() in
+// src/lib/tiktok.ts.
+model TiktokAccount {
+  id              String    @id @default(cuid())
+  channelId       String    @unique
+  // TikTok's stable user identifier (different from username, which can change).
+  openId          String    @unique
+  unionId         String?
+  username        String?
+  displayName     String?
+  avatarUrl       String?   @db.Text
+  bioDescription  String?   @db.Text
+  isVerified      Boolean   @default(false)
+  // Snapshot of stats at last refresh — the dashboard reads these and
+  // a daily cron upserts new TiktokAccountSnapshot rows for trends.
+  followerCount   Int       @default(0)
+  followingCount  Int       @default(0)
+  likesCount      BigInt    @default(0)
+  videoCount      Int       @default(0)
+  // OAuth tokens. accessToken expires in 24h; refreshToken in 365d.
+  // Both are encrypted at rest in production via the encryption helper.
+  accessToken     String    @db.Text
+  refreshToken    String    @db.Text
+  accessExpiresAt DateTime
+  refreshExpiresAt DateTime
+  scope           String
+  connectedAt     DateTime  @default(now())
+  lastSyncedAt    DateTime?
+
+  channel   Channel                 @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  snapshots TiktokAccountSnapshot[]
+  videos    TiktokVideo[]
+
+  @@map("dmg_tiktok_accounts")
+}
+
+model TiktokAccountSnapshot {
+  id              String   @id @default(cuid())
+  accountId       String
+  capturedAt      DateTime @default(now())
+  followerCount   Int
+  followingCount  Int
+  likesCount      BigInt
+  videoCount      Int
+
+  account TiktokAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@index([accountId, capturedAt])
+  @@map("dmg_tiktok_account_snapshots")
+}
+
+model TiktokVideo {
+  id              String    @id @default(cuid())
+  accountId       String
+  // TikTok's video id ("video_id" in Display API responses).
+  ttVideoId       String    @unique
+  title           String?   @db.Text
+  description     String?   @db.Text
+  coverImageUrl   String?   @db.Text
+  shareUrl        String?   @db.Text
+  durationSec     Int       @default(0)
+  createdAtTt     DateTime
+  // Latest metrics. Refresh is incremental — we keep the latest read
+  // here and historical curves in TiktokVideoSnapshot.
+  viewCount       BigInt    @default(0)
+  likeCount       BigInt    @default(0)
+  commentCount   BigInt    @default(0)
+  shareCount      BigInt    @default(0)
+  lastSyncedAt    DateTime?
+
+  account   TiktokAccount         @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  snapshots TiktokVideoSnapshot[]
+
+  @@index([accountId, createdAtTt])
+  @@map("dmg_tiktok_videos")
+}
+
+model TiktokVideoSnapshot {
+  id          String   @id @default(cuid())
+  videoId     String
+  capturedAt  DateTime @default(now())
+  viewCount   BigInt
+  likeCount   BigInt
+  commentCount BigInt
+  shareCount  BigInt
+
+  video TiktokVideo @relation(fields: [videoId], references: [id], onDelete: Cascade)
+
+  @@index([videoId, capturedAt])
+  @@map("dmg_tiktok_video_snapshots")
 }

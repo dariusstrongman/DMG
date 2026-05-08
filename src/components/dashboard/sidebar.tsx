@@ -12,6 +12,7 @@ import {
   Settings,
   TrendingUp,
   Lightbulb,
+  Music2,
   Menu,
   X,
 } from "lucide-react";
@@ -30,6 +31,7 @@ const PRIMARY: Item[] = [
   { href: "/dashboard/ideas", label: "Ideas", icon: Lightbulb, badge: "AI" },
   { href: "/dashboard/analytics", label: "Analytics", icon: TrendingUp },
   { href: "/dashboard/ai", label: "AI Insights", icon: Sparkles },
+  { href: "/dashboard/tiktok", label: "TikTok", icon: Music2 },
   { href: "/dashboard/competitors", label: "Competitors", icon: Users },
   { href: "/dashboard/automations", label: "Automations", icon: Bell },
 ];

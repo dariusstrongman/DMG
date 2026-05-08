@@ -2,6 +2,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { ArrowUpRight, Eye, Film, PlayCircle, Users } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
+import { after } from "next/server";
 import { fetchDmgSnapshot } from "@/lib/youtube";
 import { DMG_HANDLE } from "@/lib/config";
 import { getActiveChannel } from "@/lib/active-channel";
@@ -35,9 +36,16 @@ export default async function DashboardOverview() {
   const { channel, videos } = snap;
   const SUBSCRIBER_GOAL = settings.subscriberGoal;
 
-  // Persist a snapshot (throttled to ~1/hour) so projections have history.
-  // Fire-and-forget shape: failures are swallowed inside the helper.
-  await recordChannelSnapshot(channel, videos);
+  // Persist a snapshot (throttled to ~1/hour) — defer with after() so
+  // it runs AFTER the response is sent. Previously this added one
+  // round-trip of DB write latency to every dashboard page load.
+  after(async () => {
+    try {
+      await recordChannelSnapshot(channel, videos);
+    } catch {
+      // ignore — snapshots are eventually-consistent
+    }
+  });
 
   const [history, deltas] = await Promise.all([
     getSubscriberHistory(channel.id, 90),

@@ -1,4 +1,5 @@
 import { Users } from "lucide-react";
+import { after } from "next/server";
 import {
   listCompetitorsWithLatest,
   refreshCompetitorSnapshots,
@@ -18,7 +19,17 @@ export const metadata = { title: "Competitors" };
 export const dynamic = "force-dynamic";
 
 export default async function CompetitorsPage() {
-  await refreshCompetitorSnapshots();
+  // Snapshot refresh hits YouTube once per competitor — push to after()
+  // so the page renders from the existing rows immediately. Next view
+  // will see the freshened data.
+  after(async () => {
+    try {
+      await refreshCompetitorSnapshots();
+    } catch {
+      // ignore
+    }
+  });
+
   const __ch = await getActiveChannel();
   const [rows, snap] = await Promise.all([
     listCompetitorsWithLatest(),

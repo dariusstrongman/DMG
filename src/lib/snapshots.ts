@@ -6,6 +6,7 @@
 // Cold-start safe: every helper here returns gracefully if the DB
 // isn't reachable, so the dashboard still renders from live YT data.
 
+import { cache } from "react";
 import { db } from "./db";
 import type { ChannelStats, VideoStats } from "./youtube";
 import type { SubSnapshot } from "./projections";
@@ -73,9 +74,9 @@ export async function recordChannelSnapshot(
 // Returns subscriber history ascending. Empty array on any failure
 // so the projection layer can show a cold-start state instead of
 // throwing.
-export async function getSubscriberHistory(
+export const getSubscriberHistory = cache(async function getSubscriberHistoryImpl(
   ytChannelId: string,
-  days = 90
+  days = 90,
 ): Promise<SubSnapshot[]> {
   try {
     const channel = await db.channel.findUnique({
@@ -96,7 +97,7 @@ export async function getSubscriberHistory(
   } catch {
     return [];
   }
-}
+});
 
 export type DeltaWindow = {
   windowHours: number;
@@ -106,51 +107,51 @@ export type DeltaWindow = {
 
 // For the velocity strip. Returns delta vs the snapshot closest to N
 // hours ago (within a 50% tolerance). null when no comparable point.
-export async function getChannelDeltas(
-  ytChannelId: string
+//
+// Pulls the full 30d snapshot history in one query (channelSnapshots
+// for a channel are ~720 rows max at hourly cadence) and resolves all
+// three windows in memory. Previously this issued 3 separate findFirst
+// queries plus a channel lookup — 4 round-trips for a velocity strip
+// that renders on every dashboard load.
+export const getChannelDeltas = cache(async function getChannelDeltasImpl(
+  ytChannelId: string,
 ): Promise<DeltaWindow[]> {
   const windows = [24, 7 * 24, 30 * 24];
+  const empty = windows.map((h) => ({ windowHours: h, subsDelta: null, viewsDelta: null }));
   try {
     const channel = await db.channel.findUnique({
       where: { ytChannelId },
       select: { id: true },
     });
-    if (!channel) return windows.map((h) => ({ windowHours: h, subsDelta: null, viewsDelta: null }));
+    if (!channel) return empty;
 
-    const latest = await db.channelSnapshot.findFirst({
-      where: { channelId: channel.id },
-      orderBy: { capturedAt: "desc" },
+    const lookback = new Date(Date.now() - 32 * 24 * 60 * 60 * 1000);
+    const rows = await db.channelSnapshot.findMany({
+      where: { channelId: channel.id, capturedAt: { gte: lookback } },
+      orderBy: { capturedAt: "asc" },
       select: { subscribers: true, totalViews: true, capturedAt: true },
     });
-    if (!latest) return windows.map((h) => ({ windowHours: h, subsDelta: null, viewsDelta: null }));
+    if (rows.length === 0) return empty;
 
-    const out: DeltaWindow[] = [];
-    for (const hours of windows) {
-      const target = new Date(latest.capturedAt.getTime() - hours * 60 * 60 * 1000);
+    const latest = rows[rows.length - 1];
+
+    return windows.map((hours) => {
+      const target = latest.capturedAt.getTime() - hours * 60 * 60 * 1000;
       const tolerance = hours * 60 * 60 * 1000 * 0.5;
-      const match = await db.channelSnapshot.findFirst({
-        where: {
-          channelId: channel.id,
-          capturedAt: {
-            gte: new Date(target.getTime() - tolerance),
-            lte: new Date(target.getTime() + tolerance),
-          },
-        },
-        orderBy: { capturedAt: "asc" },
-        select: { subscribers: true, totalViews: true },
-      });
-      if (!match) {
-        out.push({ windowHours: hours, subsDelta: null, viewsDelta: null });
-        continue;
-      }
-      out.push({
+      const lo = target - tolerance;
+      const hi = target + tolerance;
+      // Earliest row inside the window (rows are already asc-sorted).
+      const match = rows.find(
+        (r) => r.capturedAt.getTime() >= lo && r.capturedAt.getTime() <= hi,
+      );
+      if (!match) return { windowHours: hours, subsDelta: null, viewsDelta: null };
+      return {
         windowHours: hours,
         subsDelta: Number(latest.subscribers) - Number(match.subscribers),
         viewsDelta: Number(latest.totalViews) - Number(match.totalViews),
-      });
-    }
-    return out;
+      };
+    });
   } catch {
-    return windows.map((h) => ({ windowHours: h, subsDelta: null, viewsDelta: null }));
+    return empty;
   }
-}
+});

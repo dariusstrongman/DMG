@@ -13,6 +13,7 @@ import {
   TrendingUp,
   Lightbulb,
   Music2,
+  CalendarClock,
   Menu,
   X,
 } from "lucide-react";
@@ -34,6 +35,7 @@ const PRIMARY: Item[] = [
   { href: "/dashboard/tiktok", label: "TikTok", icon: Music2 },
   { href: "/dashboard/competitors", label: "Competitors", icon: Users },
   { href: "/dashboard/automations", label: "Automations", icon: Bell },
+  { href: "/dashboard/schedule", label: "Schedule", icon: CalendarClock },
 ];
 
 const SECONDARY: Item[] = [

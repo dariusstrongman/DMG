@@ -1,12 +1,15 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { TrendingUp, TrendingDown, Minus, Target, CalendarClock } from "lucide-react";
-import { formatNumber } from "@/lib/utils";
+import { TrendingUp, TrendingDown, Minus, Target, CalendarClock, Zap, Upload, Percent } from "lucide-react";
 import {
   type GoalProjection,
+  type MonteCarloProjection,
   formatPace,
   formatDays,
   formatEta,
+  formatMonth,
+  formatPct,
 } from "@/lib/projections";
+
 export function GoalTracker({
   projection,
   goalDeadline,
@@ -26,6 +29,8 @@ export function GoalTracker({
     "text-muted-foreground";
 
   const onPaceLabel = computeOnPaceLabel(p, goalDeadline ?? null);
+  const mc = p.monteCarlo;
+  const useMc = !!(mc && mc.reason === "ok" && mc.p50Date && mc.hitRate >= 0.05);
 
   return (
     <Card className="overflow-hidden">
@@ -60,29 +65,35 @@ export function GoalTracker({
           </div>
         </div>
 
-        {/* ETA + pace grid */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <Stat
-            label="ETA"
-            icon={<CalendarClock className="size-3.5" />}
-            value={p.cold ? "gathering data" : formatEta(p.etaDate)}
-            sub={p.cold ? "need 2+ snapshots" : formatDays(p.daysToGoal)}
+        {/* Outlook block — Monte Carlo when we have enough video data,
+            linear ETA as a fallback. */}
+        {useMc ? (
+          <McOutlook mc={mc as MonteCarloProjection} linearEta={p.etaDate} />
+        ) : (
+          <LinearOutlook
+            etaDate={p.etaDate}
+            cold={p.cold}
+            daysToGoal={p.daysToGoal}
+            mcReason={mc?.reason}
           />
+        )}
+
+        {/* Pace strip */}
+        <div className="grid grid-cols-3 gap-3">
           <Stat
             label="Pace · 7d"
             icon={trendIcon}
             iconClass={trendClass}
             value={formatPace(p.pace7d.perDay)}
           />
-          <Stat
-            label="Pace · 30d"
-            value={formatPace(p.pace30d.perDay)}
-          />
-          <Stat
-            label="Pace · all time"
-            value={formatPace(p.paceLifetime.perDay)}
-          />
+          <Stat label="Pace · 30d" value={formatPace(p.pace30d.perDay)} />
+          <Stat label="Pace · all time" value={formatPace(p.paceLifetime.perDay)} />
         </div>
+
+        {/* Growth signals — why the projection looks the way it does. */}
+        {mc && (mc.reason === "ok" || mc.recentVideosUsed > 0) ? (
+          <GrowthSignals mc={mc} />
+        ) : null}
 
         {onPaceLabel ? (
           <div className="text-xs font-mono uppercase tracking-widest text-muted-foreground">
@@ -91,6 +102,101 @@ export function GoalTracker({
         ) : null}
       </CardContent>
     </Card>
+  );
+}
+
+function McOutlook({ mc, linearEta }: { mc: MonteCarloProjection; linearEta: Date | null }) {
+  const horizonYears = mc.horizonDays / 365;
+  const hint = linearEta
+    ? `Linear extrapolation alone says ${linearEta.toLocaleDateString(undefined, { month: "short", year: "numeric" })}, but linear ignores breakout videos.`
+    : "Linear extrapolation isn't useful at your current pace — this model is.";
+  return (
+    <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-4 space-y-2">
+      <div className="flex items-center gap-2 text-[10px] font-mono uppercase tracking-widest text-emerald-300">
+        <CalendarClock className="size-3.5" /> Outlook (Monte Carlo · {mc.recentVideosUsed} recent videos)
+      </div>
+      <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
+        <div className="text-2xl font-semibold tabular-nums">{formatMonth(mc.p50Date)}</div>
+        <div className="text-xs font-mono text-muted-foreground">
+          median · range {formatMonth(mc.p10Date)} → {formatMonth(mc.p90Date)}
+        </div>
+      </div>
+      <div className="text-xs text-muted-foreground">
+        <span className="text-foreground font-mono">{formatPct(mc.hitRate)}</span> chance of hitting goal within {horizonYears.toFixed(0)} years.
+      </div>
+      <div className="text-[11px] text-muted-foreground/80">{hint}</div>
+    </div>
+  );
+}
+
+function LinearOutlook({
+  etaDate,
+  cold,
+  daysToGoal,
+  mcReason,
+}: {
+  etaDate: Date | null;
+  cold: boolean;
+  daysToGoal: number | null;
+  mcReason?: MonteCarloProjection["reason"];
+}) {
+  const tooCold = mcReason === "too_cold";
+  const noViews = mcReason === "no_views";
+  return (
+    <div className="rounded-lg bg-secondary/40 border border-border p-4 space-y-1">
+      <div className="flex items-center gap-2 text-[10px] font-mono uppercase tracking-widest text-muted-foreground">
+        <CalendarClock className="size-3.5" /> ETA · linear (rough)
+      </div>
+      <div className="text-2xl font-semibold tabular-nums">
+        {cold ? "gathering data" : formatEta(etaDate)}
+      </div>
+      <div className="text-xs text-muted-foreground">
+        {cold ? "need 2+ snapshots" : daysToGoal !== null ? formatDays(daysToGoal) : "—"}
+      </div>
+      {tooCold ? (
+        <div className="text-[11px] text-muted-foreground/80 pt-1">
+          Not enough recent uploads to model breakout potential. Post more videos to unlock the Monte Carlo outlook.
+        </div>
+      ) : noViews ? (
+        <div className="text-[11px] text-muted-foreground/80 pt-1">
+          Recent videos have ~0 views, so the empirical model can't sample upside. Linear is the only floor right now.
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function GrowthSignals({ mc }: { mc: MonteCarloProjection }) {
+  const cadenceLabel =
+    mc.uploadsPerDay >= 1
+      ? `${mc.uploadsPerDay.toFixed(1)} / day`
+      : `${(mc.uploadsPerDay * 7).toFixed(1)} / week`;
+  const hitFraction = mc.recentVideosUsed > 0
+    ? mc.hitVideoCount / mc.recentVideosUsed
+    : 0;
+  const hitLabel =
+    mc.hitVideoCount > 0
+      ? `1 in ${Math.max(2, Math.round(1 / hitFraction))} (${mc.hitVideoCount}/${mc.recentVideosUsed})`
+      : `0 / ${mc.recentVideosUsed}`;
+  return (
+    <div className="grid grid-cols-3 gap-3">
+      <Stat
+        label="Upload cadence"
+        icon={<Upload className="size-3.5" />}
+        value={cadenceLabel}
+      />
+      <Stat
+        label="Breakout rate"
+        icon={<Zap className="size-3.5" />}
+        value={hitLabel}
+        sub="videos ≥ 3× median"
+      />
+      <Stat
+        label="Follow / view"
+        icon={<Percent className="size-3.5" />}
+        value={`${(mc.conversionRate * 100).toFixed(2)}%`}
+      />
+    </div>
   );
 }
 

@@ -58,7 +58,12 @@ export default async function DashboardOverview() {
     history.length === 0
       ? [{ subscribers: channel.subscribers, capturedAt: new Date() }]
       : history;
-  const projection = project(liveSeed, SUBSCRIBER_GOAL);
+  const projection = project(
+    liveSeed,
+    SUBSCRIBER_GOAL,
+    new Date(),
+    videos.map((v) => ({ views: v.views, publishedAt: v.publishedAt })),
+  );
 
   // Build the projected line for the chart using the best pace we have.
   const primaryPace =
